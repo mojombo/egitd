@@ -76,7 +76,13 @@ gather_out(Port, DataSoFar) ->
 stream_out(Port, Sock) ->
   {data, Data} = readline(Port),
   gen_tcp:send(Sock, Data),
-  stream_out(Port, Sock).
+  io:format("<= ~p~n", [Data]),
+  case regexp:match(Data, "0000$") of
+    {match, _Start, _Length} ->
+      done;
+    _Else ->
+      stream_out(Port, Sock)
+  end.
 
 readline(Port) ->
   receive
