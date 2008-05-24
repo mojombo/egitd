@@ -31,28 +31,61 @@ loop(LSock) ->
   loop(LSock).
   
 handle_method(Sock) ->
+  % get the requested method
   {ok, Binary} = gen_tcp:recv(Sock, 0),
   io:format("=> ~p~n", [Binary]),
-  Data = "007c74730d410fcb6603ace96f1dc55ea6196122532d HEAD\0multi_ack thin-pack side-band side-band-64k ofs-delta shallow no-progress\n003e15f0ceeef36e49eb51d6efcc7ed4df7b6a03d14f refs/heads/Bertg\n003e7d1665144a3a975c05f1f43902ddaf084e784dbe refs/heads/debug\n003f60487cc2182dd3f0fbc841d7f45afc61ef18ffc5 refs/heads/debug2\n003d5a3f6be755bbb7deae50065988cbfa1ffa9ab68a refs/heads/dist\n003e7e47fe2bd8d01d481f44d7af0531bd93d3b21c01 refs/heads/local\n003f74730d410fcb6603ace96f1dc55ea6196122532d refs/heads/master\n0000",
+  
+  % make the port
+  Command = "git upload-pack /Users/tom/dev/sandbox/git/god.git",
+  Port = open_port({spawn, Command}, []),
+  
+  % send the output back to client
+  Data = gather_out(Port),
   io:format("<= ~p~n", [Data]),
   gen_tcp:send(Sock, Data),
-  handle(Sock).
-
-handle(Sock) ->
+  
+  % get the request data from client
   io:format("getting more data~n"),
-  {ok, Binary} = gen_tcp:recv(Sock, 0),
-  io:format("=> ~p~n~n", [Binary]),
-  case handle_line(Binary) of
-    {data, Data} ->
-      io:format("=> ~p~n", [Data]),
-      handle(Sock);
-    done ->
-      io:format("done~n"),
-      gen_tcp:send(Sock, "ok\n"),
-      ok = gen_tcp:close(Sock)
+  {ok, Binary2} = gen_tcp:recv(Sock, 0),
+  io:format("=> ~p~n~n", [Binary2]),
+  
+  % send to port
+  port_command(Port, Binary2),
+  io:format("Sent pack request to port~n"),
+  
+  % send the pack
+  stream_out(Port, Sock),
+  
+  % close connection
+  gen_tcp:send(Sock, "ok\n"),
+  ok = gen_tcp:close(Sock).
+
+gather_out(Port) ->
+  gather_out(Port, "").
+  
+gather_out(Port, DataSoFar) ->
+  {data, Data} = readline(Port),
+  TotalData = DataSoFar ++ Data,
+  case regexp:match(TotalData, "\n0000$") of
+    {match, _Start, _Length} ->
+      TotalData;
+    _Else ->
+      gather_out(Port, TotalData)
   end.
   
-handle_line("0000009done\n") ->
-  done;
-handle_line(Line) ->
-  {data, Line}.
+stream_out(Port, Sock) ->
+  {data, Data} = readline(Port),
+  gen_tcp:send(Sock, Data),
+  stream_out(Port, Sock).
+
+readline(Port) ->
+  receive
+    {Port, {data, Data}} ->
+      {data, Data};
+    Msg ->
+      io:format("unknown message ~p~n", [Msg]),
+      {error, Msg}
+    after 5000 ->
+      io:format("timed out waiting for port~n"),
+      {error, timeout}
+  end.
