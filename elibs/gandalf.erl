@@ -4,5 +4,4 @@
 
 start() ->
   application:load(gandalf),
-  application:start(gandalf),
-  io:format("started gandalf~n").
+  application:start(gandalf).

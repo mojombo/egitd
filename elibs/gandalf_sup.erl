@@ -15,7 +15,6 @@ start_link(Args) ->
   supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
   
 init([]) ->
-  io:format("sup init~n"),
   {ok, {{one_for_one, 100, 300},
     [{server,
        {server, start_link, []},
