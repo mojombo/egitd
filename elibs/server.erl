@@ -47,7 +47,9 @@ handle_upload_pack(Sock, MethodSpec) ->
     handle_upload_pack_impl(Sock, MethodSpec)
   catch
     throw:{no_such_repo, Repo} ->
-      handle_upload_pack_nosuchrepo(Sock, Repo)
+      handle_upload_pack_nosuchrepo(Sock, Repo);
+    throw:{permission_denied, Repo} ->
+      handle_upload_pack_permission_denied(Sock, Repo)
   end.
 
 handle_upload_pack_impl(Sock, MethodSpec) ->
@@ -65,6 +67,11 @@ handle_upload_pack_impl(Sock, MethodSpec) ->
   end,
   
   % check for git-daemon-export-ok file
+  GitDaemonExportOkFilePath = filename:join([FullPath, "git-daemon-export-ok"]),
+  case file_exists(GitDaemonExportOkFilePath) of
+    false -> throw({permission_denied, GitDaemonExportOkFilePath});
+    true -> ok
+  end,
   
   % make the port
   Command = "git upload-pack " ++ FullPath,
@@ -91,6 +98,10 @@ handle_upload_pack_impl(Sock, MethodSpec) ->
 
 handle_upload_pack_nosuchrepo(Sock, Repo) ->
   io:format("no such repo: ~p~n", [Repo]),
+  ok = gen_tcp:close(Sock).
+  
+handle_upload_pack_permission_denied(Sock, Repo) ->
+  io:format("permission denied to repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
 
 gather_out(Port) ->
