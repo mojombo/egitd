@@ -36,15 +36,19 @@ handle_method(Sock) ->
   % dispatch
   case Method of
     {ok, "git-upload-pack"} ->
-      handle_upload_pack(Sock);
+      handle_upload_pack(Sock, MethodSpec);
     invalid ->
       gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
       ok = gen_tcp:close(Sock)
   end.
   
-handle_upload_pack(Sock) ->
+handle_upload_pack(Sock, MethodSpec) ->
+  % extract and normalize the repo path
+  {ok, Path} = extract_repo_path(MethodSpec),
+  {ok, NormalizedPath} = normalize_path(Path),
+  
   % make the port
-  Command = "git upload-pack /Users/tom/dev/sandbox/git/m/o/j/mojombo/god.git",
+  Command = "git upload-pack /Users/tom/dev/sandbox/git/" ++ NormalizedPath,
   Port = open_port({spawn, Command}, []),
   
   % the initial output from git-upload-pack lists the SHA1s of each head.
@@ -108,3 +112,18 @@ extract_method_name(MethodSpec) ->
     _Else ->
       invalid
   end.
+  
+extract_repo_path(MethodSpec) ->
+  case regexp:match(MethodSpec, " /[^\000]+\000") of
+    {match, Start, Length} ->
+      {ok, string:substr(MethodSpec, Start + 2, Length - 3)};
+    _Else ->
+      invalid
+  end.
+  
+normalize_path(Path) ->
+  Parts = string:tokens(Path, "/"),
+  [Name | _RestParts] = Parts,
+  SafeName = Name ++ Name,
+  [A, B, C | _RestName] = SafeName,
+  {ok, string:join([[A], [B], [C]] ++ Parts, "/")}.
