@@ -43,12 +43,31 @@ handle_method(Sock) ->
   end.
   
 handle_upload_pack(Sock, MethodSpec) ->
+  try
+    handle_upload_pack_impl(Sock, MethodSpec)
+  catch
+    throw:{no_such_repo, Repo} ->
+      handle_upload_pack_nosuchrepo(Sock, Repo)
+  end.
+
+handle_upload_pack_impl(Sock, MethodSpec) ->
+  Root = "/Users/tom/dev/sandbox/git/",
+  
   % extract and normalize the repo path
   {ok, Path} = extract_repo_path(MethodSpec),
   {ok, NormalizedPath} = normalize_path(Path),
+  FullPath = Root ++ NormalizedPath,
+  
+  % check for repo existence
+  case file_exists(FullPath) of
+    false -> throw({no_such_repo, FullPath});
+    true -> ok
+  end,
+  
+  % check for git-daemon-export-ok file
   
   % make the port
-  Command = "git upload-pack /Users/tom/dev/sandbox/git/" ++ NormalizedPath,
+  Command = "git upload-pack " ++ FullPath,
   Port = open_port({spawn, Command}, []),
   
   % the initial output from git-upload-pack lists the SHA1s of each head.
@@ -68,6 +87,10 @@ handle_upload_pack(Sock, MethodSpec) ->
   stream_out(Port, Sock),
   
   % close connection
+  ok = gen_tcp:close(Sock).
+
+handle_upload_pack_nosuchrepo(Sock, Repo) ->
+  io:format("no such repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
 
 gather_out(Port) ->
@@ -127,3 +150,11 @@ normalize_path(Path) ->
   SafeName = Name ++ Name,
   [A, B, C | _RestName] = SafeName,
   {ok, string:join([[A], [B], [C]] ++ Parts, "/")}.
+  
+file_exists(FullPath) ->
+  case file:read_file_info(FullPath) of
+    {ok, _Info} ->
+      true;
+    {error, _Reason} ->
+      false
+  end.
