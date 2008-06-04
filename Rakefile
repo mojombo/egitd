@@ -13,5 +13,5 @@ task :console do
 end
 
 task :go do
-  sh "erl +Bc +K true -smp enable -pz ./ebin/ -sname local_console_#{$$} -kernel start_boot_server true -run gandalf start"
+  sh "erl +Bc +K true -smp enable -pz ./ebin/ -sname local_console_#{$$} -kernel start_boot_server true -run egitd start"
 end

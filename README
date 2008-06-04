@@ -1,12 +1,12 @@
-gandalf
+egitd
   by Tom Preston-Werner <tom@github.com>
   
-Gandalf is an Erlang git-daemon implementation that provides a more flexible, scalable, and loggable way to serve public git repositories.
+egitd is an Erlang git-daemon implementation that provides a more flexible, scalable, and loggable way to serve public git repositories.
 
 INSTALL
 
-$ git clone git://github.com/mojombo/gandalf.git
-$ cd gandalf
+$ git clone git://github.com/mojombo/egitd.git
+$ cd egitd
 $ rake
 
 RUN

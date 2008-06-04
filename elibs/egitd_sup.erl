@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% Author  : Tom Preston-Werner
 %%%-------------------------------------------------------------------
--module(gandalf_sup).
+-module(egitd_sup).
 -behaviour(supervisor).
 
 -export([start/0, start_link/1, init/1]).
