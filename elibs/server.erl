@@ -35,7 +35,7 @@ handle_method(Sock) ->
   
   % dispatch
   case Method of
-    {ok, "git-upload-pack"} ->
+    {ok, "upload-pack"} ->
       handle_upload_pack(Sock, MethodSpec);
     invalid ->
       gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
@@ -86,7 +86,7 @@ handle_upload_pack_impl(Sock, MethodSpec) ->
   % once the client receives the index data, it will demand that specific
   % revisions be packaged and sent back. this demand will be forwarded to
   % git-upload-pack.
-  {ok, Demand} = gen_tcp:recv(Sock, 0),
+  Demand = gather_demand(Sock),
   port_command(Port, Demand),
   
   % in response to the demand, git-upload-pack will stream out the requested
@@ -104,10 +104,22 @@ handle_upload_pack_permission_denied(Sock, Repo) ->
   io:format("permission denied to repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
 
+gather_demand(Sock) ->
+  gather_demand(Sock, "").
+gather_demand(Sock, DataSoFar) ->
+  {ok, Data} = gen_tcp:recv(Sock, 0),
+  TotalData = DataSoFar ++ Data,
+  case regexp:first_match(TotalData, "\n00000009done\n$") of
+    {match, _Start, _Length} ->
+      TotalData;
+    _Else ->
+      gather_demand(Sock, TotalData)
+  end.
+
 gather_out(Port) ->
   gather_out(Port, "").
-  
 gather_out(Port, DataSoFar) ->
+  % io:format("gather-out "),
   {data, Data} = readline(Port),
   TotalData = DataSoFar ++ Data,
   case regexp:first_match(TotalData, "\n0000$") of
@@ -118,7 +130,9 @@ gather_out(Port, DataSoFar) ->
   end.
   
 stream_out(Port, Sock) ->
+  % io:format("stream out "),
   {data, Data} = readline(Port),
+  % io:format("~p", [Data]),
   gen_tcp:send(Sock, Data),
   case regexp:first_match(Data, "0000$") of
     {match, _Start, _Length} ->
@@ -134,15 +148,15 @@ readline(Port) ->
     Msg ->
       io:format("unknown message ~p~n", [Msg]),
       {error, Msg}
-    after 5000 ->
+    after 15000 ->
       io:format("timed out waiting for port~n"),
       {error, timeout}
   end.
   
 extract_method_name(MethodSpec) ->
-  case regexp:match(MethodSpec, "....[a-z\-]+ ") of
+  case regexp:match(MethodSpec, "....git[ -][a-z\-]+ ") of
     {match, Start, Length} ->
-      {ok, string:substr(MethodSpec, Start + 4, Length - 5)};
+      {ok, string:substr(MethodSpec, Start + 8, Length - 9)};
     _Else ->
       invalid
   end.
