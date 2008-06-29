@@ -36,21 +36,24 @@ loop(LSock) ->
   
 handle_method(Sock) ->
   % get the requested method
-  {ok, MethodSpec} = gen_tcp:recv(Sock, 0),
-  Method = extract_method_name(MethodSpec),
+  {ok, Header} = gen_tcp:recv(Sock, 0),
+  {ok, Host} = extract_host(Header),
+  Method = extract_method_name(Header),
+  
+  io:format("host = ~p~n", [Host]),
   
   % dispatch
   case Method of
     {ok, "upload-pack"} ->
-      handle_upload_pack(Sock, MethodSpec);
+      handle_upload_pack(Sock, Header);
     invalid ->
       gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
       ok = gen_tcp:close(Sock)
   end.
   
-handle_upload_pack(Sock, MethodSpec) ->
+handle_upload_pack(Sock, Header) ->
   try
-    handle_upload_pack_impl(Sock, MethodSpec)
+    handle_upload_pack_impl(Sock, Header)
   catch
     throw:{no_such_repo, Repo} ->
       handle_upload_pack_nosuchrepo(Sock, Repo);
@@ -58,11 +61,11 @@ handle_upload_pack(Sock, MethodSpec) ->
       handle_upload_pack_permission_denied(Sock, Repo)
   end.
 
-handle_upload_pack_impl(Sock, MethodSpec) ->
+handle_upload_pack_impl(Sock, Header) ->
   Root = "/Users/tom/dev/sandbox/git/",
   
   % extract and normalize the repo path
-  {ok, Path} = extract_repo_path(MethodSpec),
+  {ok, Path} = extract_repo_path(Header),
   {ok, NormalizedPath} = normalize_path(Path),
   FullPath = Root ++ NormalizedPath,
   
@@ -159,18 +162,26 @@ readline(Port) ->
       {error, timeout}
   end.
   
-extract_method_name(MethodSpec) ->
-  case regexp:match(MethodSpec, "....git[ -][a-z\-]+ ") of
+extract_method_name(Header) ->
+  case regexp:match(Header, "....git[ -][a-z\-]+ ") of
     {match, Start, Length} ->
-      {ok, string:substr(MethodSpec, Start + 8, Length - 9)};
+      {ok, string:substr(Header, Start + 8, Length - 9)};
     _Else ->
       invalid
   end.
   
-extract_repo_path(MethodSpec) ->
-  case regexp:match(MethodSpec, " /[^\000]+\000") of
+extract_host(Header) ->
+  case regexp:match(string:to_lower(Header), "\000host=[^\000]+\000") of
     {match, Start, Length} ->
-      {ok, string:substr(MethodSpec, Start + 2, Length - 3)};
+      {ok, string:substr(Header, Start + 6, Length - 7)};
+    _Else ->
+      {ok, "invalid"}
+  end.
+  
+extract_repo_path(Header) ->
+  case regexp:match(Header, " /[^\000]+\000") of
+    {match, Start, Length} ->
+      {ok, string:substr(Header, Start + 2, Length - 3)};
     _Else ->
       invalid
   end.
