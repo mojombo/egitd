@@ -2,7 +2,7 @@
 -export([read_conf/1, eval_erlang_expr/1, eval_erlang_expr/2, concat/2, namespace3/1]).
 
 read_conf(Conf) ->
-  DB = ets:new(db, [set]),
+  DB = ets:new(db, [set, named_table]),
   {ok, DataBinary} = file:read_file(Conf),
   DataString = binary_to_list(DataBinary),
   Lines = string:tokens(DataString, "\n"),
@@ -12,7 +12,8 @@ read_conf(Conf) ->
 
 parse_conf_line(Line, DB) ->
   [Host, Regex, Transform] = string:tokens(Line, "\t"),
-  ets:insert(DB, {Host, {Regex, Transform}}).
+  ets:insert(DB, {Host, {Regex, Transform}}),
+  io:format("~p~n", [ets:lookup(db, Host)]).
 
 eval_erlang_expr(Expr) ->
   eval_erlang_expr(Expr, []).
