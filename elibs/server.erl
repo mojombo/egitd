@@ -40,20 +40,18 @@ handle_method(Sock) ->
   {ok, Host} = extract_host(Header),
   Method = extract_method_name(Header),
   
-  io:format("host = ~p~n", [Host]),
-  
   % dispatch
   case Method of
     {ok, "upload-pack"} ->
-      handle_upload_pack(Sock, Header);
+      handle_upload_pack(Sock, Host, Header);
     invalid ->
       gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
       ok = gen_tcp:close(Sock)
   end.
   
-handle_upload_pack(Sock, Header) ->
+handle_upload_pack(Sock, Host, Header) ->
   try
-    handle_upload_pack_impl(Sock, Header)
+    handle_upload_pack_impl(Sock, Host, Header)
   catch
     throw:{no_such_repo, Repo} ->
       handle_upload_pack_nosuchrepo(Sock, Repo);
@@ -61,13 +59,17 @@ handle_upload_pack(Sock, Header) ->
       handle_upload_pack_permission_denied(Sock, Repo)
   end.
 
-handle_upload_pack_impl(Sock, Header) ->
+handle_upload_pack_impl(Sock, Host, Header) ->
   Root = "/Users/tom/dev/sandbox/git/",
   
   % extract and normalize the repo path
   {ok, Path} = extract_repo_path(Header),
-  {ok, NormalizedPath} = normalize_path(Path),
-  FullPath = Root ++ NormalizedPath,
+  {ok, FullPath} = conf:convert_path(Host, Path),
+  
+  io:format("fullpath = ~p~n", [FullPath]),
+  
+  % {ok, NormalizedPath} = normalize_path(Path),
+  % FullPath = Root ++ NormalizedPath,
   
   % check for repo existence
   case file_exists(FullPath) of
