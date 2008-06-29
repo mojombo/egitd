@@ -5,9 +5,15 @@ start_link() ->
   proc_lib:start_link(?MODULE, init, [self()]).
 
 init(Parent) ->
+  read_conf(),
   LSock = try_listen(10),
   proc_lib:init_ack(Parent, {ok, self()}),
   loop(LSock).
+  
+read_conf() ->
+  {ok, Conf} = application:get_env(conf),
+  io:format("Using conf file ~p~n", [Conf]),
+  conf:read_conf(Conf).
   
 try_listen(0) ->
   io:format("Could not listen on port 9418~n");
