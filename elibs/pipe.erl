@@ -1,5 +1,5 @@
 -module(pipe).
--export([new/0, write/2, read/2]).
+-export([new/0, write/2, read/2, size/1]).
 
 -record(pipe, {pos = 0, size = 0, queue = queue:new()}).
 
@@ -8,7 +8,7 @@ new() ->
 
 write(Bin, Pipe) ->
   #pipe{size = Size, queue = Q} = Pipe,
-  Pipe#pipe{size = Size + size(Bin), queue = queue:in(Bin, Q)}.
+  {ok, Pipe#pipe{size = Size + erlang:size(Bin), queue = queue:in(Bin, Q)}}.
   
 read(Num, Pipe) ->
   #pipe{size = Size, queue = Q1} = Pipe,
@@ -24,7 +24,7 @@ read(Num, Pipe) ->
       
 read_internal(Acc, Num, Q1) ->
   {{value, Bin}, Q2} = queue:out(Q1),
-  Size = size(Bin),
+  Size = erlang:size(Bin),
   case spaceship(Num, Size) of
     -1 ->
       {B1, B2} = split_binary(Bin, Num),
@@ -39,6 +39,8 @@ read_internal(Acc, Num, Q1) ->
       read_internal(Acc2, Num - Size, Q2)
   end. 
       
+size(Pipe) ->
+  Pipe#pipe.size.
       
 % util
 

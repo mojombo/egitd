@@ -64,7 +64,7 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   {ok, Path} = extract_repo_path(Header),
   {ok, FullPath} = conf:convert_path(Host, Path),
   
-  io:format("fullpath = ~p~n", [FullPath]),
+  % io:format("fullpath = ~p~n", [FullPath]),
   
   % check for repo existence
   case file_exists(FullPath) of
@@ -81,7 +81,7 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   
   % make the port
   Command = "git upload-pack " ++ FullPath,
-  Port = open_port({spawn, Command}, []),
+  Port = open_port({spawn, Command}, [binary]),
   
   % the initial output from git-upload-pack lists the SHA1s of each head.
   % data completion is denoted by "0000" on it's own line.
@@ -124,33 +124,72 @@ gather_demand(Sock, DataSoFar) ->
   end.
 
 gather_out(Port) ->
-  gather_out(Port, "").
-gather_out(Port, DataSoFar) ->
+  gather_out(Port, [], pipe:new()).
+gather_out(Port, DataSoFar, Pipe) ->
   % io:format("gather-out "),
-  {data, Data} = readline(Port),
-  TotalData = DataSoFar ++ Data,
-  case regexp:first_match(TotalData, "\n0000$") of
-    {match, _Start, _Length} ->
-      TotalData;
-    _Else ->
-      gather_out(Port, TotalData)
+  {ok, Data, P2} = read_chunk(Port, Pipe),
+  % io:format("+++~n~p~n+++~n", [Data]),
+  TotalData = lists:append(DataSoFar, [Data]),
+  case Data =:= <<"0000">> of
+    true ->
+      list_to_binary(TotalData);
+    false ->
+      gather_out(Port, TotalData, P2)
   end.
   
 stream_out(Port, Sock) ->
+  stream_out(Port, Sock, pipe:new()).
+  
+stream_out(Port, Sock, Pipe) ->
   % io:format("stream out "),
-  {data, Data} = readline(Port),
   % io:format("+++~n~p~n+++~n", [Data]),
+  {ok, Data, P2} = read_chunk(Port, Pipe),
   gen_tcp:send(Sock, Data),
-  case regexp:first_match(Data, "0000$") of
-    {match, _Start, _Length} ->
+  case Data =:= <<"0000">> of
+    true ->
       done;
-    _Else ->
-      stream_out(Port, Sock)
+    false ->
+      stream_out(Port, Sock, P2)
   end.
-
+  
+read_chunk(Port, Pipe) ->
+  case pipe:size(Pipe) >= 4 of
+    true ->
+      {ok, ChunkSizeHex, P2} = pipe:read(4, Pipe),
+      % io:format("chunk size hex = ~p~n", [ChunkSizeHex]),
+      read_chunk_body(ChunkSizeHex, Port, P2);
+    false ->
+      {data, Data} = readline(Port),
+      {ok, P2} = pipe:write(Data, Pipe),
+      read_chunk(Port, P2)
+  end.
+  
+read_chunk_body(<<"0000">>, _Port, Pipe) ->
+  {ok, <<"0000">>, Pipe};
+  
+read_chunk_body(ChunkSizeHex, Port, Pipe) ->
+  ChunkSize = convert_chunk_size(ChunkSizeHex),
+  % io:format("chunk size = ~p~n", [ChunkSize]),
+  case pipe:read(ChunkSize, Pipe) of
+    {ok, Bin, P2} ->
+      % io:format("chunk body = ~p~n", [Bin]),
+      Data = concat_binary([ChunkSizeHex, Bin]),
+      {ok, Data, P2};
+    eof ->
+      % io:format("chunk body eof~n", []),
+      {data, Data} = readline(Port),
+      {ok, P2} = pipe:write(Data, Pipe),
+      read_chunk_body(ChunkSizeHex, Port, P2)
+  end.
+      
+convert_chunk_size(ChunkSizeHex) ->
+  {ok, [Size], []} = io_lib:fread("~16u", binary_to_list(ChunkSizeHex)),
+  Size - 4.
+  
 readline(Port) ->
   receive
     {Port, {data, Data}} ->
+      % io:format("readline = ~p~n", [Data]),
       {data, Data};
     Msg ->
       io:format("unknown message ~p~n", [Msg]),
