@@ -35,7 +35,7 @@ loop(LSock) ->
   loop(LSock).
   
 handle_method(Sock) ->
-  % get the requested method
+  % get the requested host and method
   {ok, Header} = gen_tcp:recv(Sock, 0),
   {ok, Host} = extract_host(Header),
   Method = extract_method_name(Header),
@@ -60,16 +60,11 @@ handle_upload_pack(Sock, Host, Header) ->
   end.
 
 handle_upload_pack_impl(Sock, Host, Header) ->
-  Root = "/Users/tom/dev/sandbox/git/",
-  
   % extract and normalize the repo path
   {ok, Path} = extract_repo_path(Header),
   {ok, FullPath} = conf:convert_path(Host, Path),
   
   io:format("fullpath = ~p~n", [FullPath]),
-  
-  % {ok, NormalizedPath} = normalize_path(Path),
-  % FullPath = Root ++ NormalizedPath,
   
   % check for repo existence
   case file_exists(FullPath) of
@@ -187,13 +182,6 @@ extract_repo_path(Header) ->
     _Else ->
       invalid
   end.
-  
-normalize_path(Path) ->
-  Parts = string:tokens(Path, "/"),
-  [Name | _RestParts] = Parts,
-  SafeName = Name ++ Name,
-  [A, B, C | _RestName] = SafeName,
-  {ok, string:join([[A], [B], [C]] ++ Parts, "/")}.
   
 file_exists(FullPath) ->
   case file:read_file_info(FullPath) of
