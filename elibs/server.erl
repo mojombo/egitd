@@ -93,6 +93,7 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   % revisions be packaged and sent back. this demand will be forwarded to
   % git-upload-pack.
   Demand = gather_demand(Sock),
+  % io:format("+++~n~p~n+++~n", [Demand]),
   port_command(Port, Demand),
   
   % in response to the demand, git-upload-pack will stream out the requested
@@ -138,7 +139,7 @@ gather_out(Port, DataSoFar) ->
 stream_out(Port, Sock) ->
   % io:format("stream out "),
   {data, Data} = readline(Port),
-  % io:format("~p", [Data]),
+  % io:format("+++~n~p~n+++~n", [Data]),
   gen_tcp:send(Sock, Data),
   case regexp:first_match(Data, "0000$") of
     {match, _Start, _Length} ->
