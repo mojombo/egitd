@@ -37,6 +37,7 @@ loop(LSock) ->
 handle_method(Sock) ->
   % get the requested host and method
   {ok, Header} = gen_tcp:recv(Sock, 0),
+  io:format("header = ~p~n", [Header]),
   {ok, Host} = extract_host(Header),
   Method = extract_method_name(Header),
   
@@ -92,16 +93,27 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   % once the client receives the index data, it will demand that specific
   % revisions be packaged and sent back. this demand will be forwarded to
   % git-upload-pack.
-  Demand = gather_demand(Sock),
-  % io:format("+++~n~p~n+++~n", [Demand]),
-  port_command(Port, Demand),
+  case gather_demand(Sock) of
+    {ok, Demand} ->
+      % io:format("+++~n~p~n+++~n", [Demand]),
+      port_command(Port, Demand),
   
-  % in response to the demand, git-upload-pack will stream out the requested
-  % pack information. data completion is denoted by "0000".
-  stream_out(Port, Sock),
+      % in response to the demand, git-upload-pack will stream out the requested
+      % pack information. data completion is denoted by "0000".
+      stream_out(Port, Sock),
   
-  % close connection
-  ok = gen_tcp:close(Sock).
+      % close connection
+      ok = gen_tcp:close(Sock);
+    {error, closed} ->
+      port_command(Port, "0000"),
+      port_close(Port),
+      ok;
+    {error, Reason} ->
+      io:format("Client closed socket because: ~p~n", [Reason]),
+      port_command(Port, "0000"),
+      port_close(Port),
+      ok = gen_tcp:close(Sock)
+  end.
 
 handle_upload_pack_nosuchrepo(Sock, Repo) ->
   io:format("no such repo: ~p~n", [Repo]),
@@ -114,13 +126,17 @@ handle_upload_pack_permission_denied(Sock, Repo) ->
 gather_demand(Sock) ->
   gather_demand(Sock, "").
 gather_demand(Sock, DataSoFar) ->
-  {ok, Data} = gen_tcp:recv(Sock, 0),
-  TotalData = DataSoFar ++ Data,
-  case regexp:first_match(TotalData, "\n00000009done\n$") of
-    {match, _Start, _Length} ->
-      TotalData;
-    _Else ->
-      gather_demand(Sock, TotalData)
+  case gen_tcp:recv(Sock, 0) of
+    {ok, Data} ->
+      TotalData = DataSoFar ++ Data,
+      case regexp:first_match(TotalData, "\n00000009done\n$") of
+        {match, _Start, _Length} ->
+          {ok, TotalData};
+        _Else ->
+          gather_demand(Sock, TotalData)
+      end;
+    {error, Reason} ->
+      {error, Reason}
   end.
 
 gather_out(Port) ->
