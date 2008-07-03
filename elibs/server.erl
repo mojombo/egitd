@@ -45,6 +45,8 @@ handle_method(Sock) ->
   case Method of
     {ok, "upload-pack"} ->
       handle_upload_pack(Sock, Host, Header);
+    {ok, "receive-pack"} ->
+      receive_pack:handle(Sock, Host, Header);
     invalid ->
       gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
       ok = gen_tcp:close(Sock)
