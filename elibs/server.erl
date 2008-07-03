@@ -36,20 +36,24 @@ loop(LSock) ->
   
 handle_method(Sock) ->
   % get the requested host and method
-  {ok, Header} = gen_tcp:recv(Sock, 0),
-  % io:format("header = ~p~n", [Header]),
-  {ok, Host} = extract_host(Header),
-  Method = extract_method_name(Header),
+  case gen_tcp:recv(Sock, 0) of
+    {ok, Header} ->
+      % io:format("header = ~p~n", [Header]),
+      {ok, Host} = extract_host(Header),
+      Method = extract_method_name(Header),
   
-  % dispatch
-  case Method of
-    {ok, "upload-pack"} ->
-      handle_upload_pack(Sock, Host, Header);
-    {ok, "receive-pack"} ->
-      receive_pack:handle(Sock, Host, Header);
-    invalid ->
-      gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
-      ok = gen_tcp:close(Sock)
+      % dispatch
+      case Method of
+        {ok, "upload-pack"} ->
+          handle_upload_pack(Sock, Host, Header);
+        {ok, "receive-pack"} ->
+          receive_pack:handle(Sock, Host, Header);
+        invalid ->
+          gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
+          ok = gen_tcp:close(Sock)
+      end;
+    {error, closed} ->
+      io:format("ping~n")
   end.
   
 handle_upload_pack(Sock, Host, Header) ->
