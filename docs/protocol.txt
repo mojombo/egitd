@@ -1,3 +1,5 @@
+INITIAL CLONE
+
 The client connects and sends the request header. The clone command
 
 > git clone git://volcano/mojombo/god.git
@@ -62,3 +64,26 @@ final response:
 "0037\002Total 2797 (delta 1799), reused 2360 (delta 1529)\n"
 ...
 "<\276\255L\273s\005\001w0006\001[0000"
+
+
+UPDATE
+
+005ewant 1814e8d67376c467ea221f5ed290957fac61cbfc multi_ack side-band-64k thin-pack ofs-delta\n
+00000032have 74730d410fcb6603ace96f1dc55ea6196122532d\n
+0032have 09c409e182256ed9505febccaf323c99b43c55df\n
+0032have d68a13199d99cecc663ad0dda5e24455f3628b65\n
+0032have b3b55b5794e816d1b20e7a6908551f2430d7403f\n
+0032have 4f12e1ceb12a9da7444a4de3572b3288f623276b\n
+0032have 57bd329169794773b962e631d239cf3c8a3ed9de\n
+0032have 4bd501221b1568d769d900f60d36d6c0b264350b\n
+0032have ba98fdce987aa50fe840a2cafd5f1f4e6e0815aa\n
+0032have 582fca91f5dde41339522299835639d82d10a576\n
+0032have 466dbc3416c15c7f968f3012aa23904e157ad50f\n
+0032have 87c194332a77399b96efec701a242a0df16778d8\n
+0032have 15f0ceeef36e49eb51d6efcc7ed4df7b6a03d14f\n
+0032have b69311d226b8569c27f2e0ed641f59eb7b018d1a\n
+0032have 5a3f6be755bbb7deae50065988cbfa1ffa9ab68a\n
+0032have 60487cc2182dd3f0fbc841d7f45afc61ef18ffc5\n
+0032have 7d1665144a3a975c05f1f43902ddaf084e784dbe\n
+0032have 7e47fe2bd8d01d481f44d7af0531bd93d3b21c01\n
+0009done

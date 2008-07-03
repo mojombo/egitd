@@ -90,6 +90,7 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   % data completion is denoted by "0000" on it's own line.
   % this is sent back immediately to the client.
   Index = gather_out(Port),
+  % io:format("index = ~p~n", [Index]),
   gen_tcp:send(Sock, Index),
   
   % once the client receives the index data, it will demand that specific
@@ -130,8 +131,9 @@ gather_demand(Sock) ->
 gather_demand(Sock, DataSoFar) ->
   case gen_tcp:recv(Sock, 0) of
     {ok, Data} ->
+      % io:format("data = ~p~n", [Data]),
       TotalData = DataSoFar ++ Data,
-      case regexp:first_match(TotalData, "\n00000009done\n$") of
+      case regexp:first_match(TotalData, "0009done\n$") of
         {match, _Start, _Length} ->
           {ok, TotalData};
         _Else ->
