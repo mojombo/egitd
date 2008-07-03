@@ -98,6 +98,8 @@ handle_upload_pack_impl(Sock, Host, Header) ->
   % git-upload-pack.
   case gather_demand(Sock) of
     {ok, Demand} ->
+      log_initial_clone(Demand, Host, Path),
+      
       % io:format("+++~n~p~n+++~n", [Demand]),
       port_command(Port, Demand),
   
@@ -217,6 +219,14 @@ readline(Port) ->
     after 15000 ->
       io:format("timed out waiting for port~n"),
       {error, timeout}
+  end.
+  
+log_initial_clone(Demand, Host, Path) ->
+  case regexp:first_match(Demand, "have") of
+    {match ,_Start, _Length} ->
+      ok;
+    _Else ->
+      io:format("initial clone: ~p, ~p~n", [Host, Path])
   end.
   
 extract_method_name(Header) ->
