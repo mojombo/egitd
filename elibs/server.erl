@@ -37,7 +37,7 @@ loop(LSock) ->
 handle_method(Sock) ->
   % get the requested host and method
   {ok, Header} = gen_tcp:recv(Sock, 0),
-  io:format("header = ~p~n", [Header]),
+  % io:format("header = ~p~n", [Header]),
   {ok, Host} = extract_host(Header),
   Method = extract_method_name(Header),
   
