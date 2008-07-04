@@ -15,7 +15,7 @@ init(Parent) ->
   
 read_conf() ->
   {ok, Conf} = application:get_env(conf),
-  io:format("Using conf file ~p~n", [Conf]),
+  error_logger:info_msg("Using conf file ~p~n", [Conf]),
   conf:read_conf(Conf).
   
 init_log() ->
@@ -26,15 +26,15 @@ init_log(undefined) ->
   ok.
   
 try_listen(0) ->
-  io:format("Could not listen on port 9418~n");
+  error_logger:info_msg("Could not listen on port 9418~n");
 try_listen(Times) ->
   Res = gen_tcp:listen(9418, [list, {packet, 0}, {active, false}]),
   case Res of
     {ok, LSock} ->
-      io:format("Listening on port 9418~n"),
+      error_logger:info_msg("Listening on port 9418~n"),
       LSock;
     {error, Reason} ->
-      io:format("Could not listen on port 9418: ~p~n", [Reason]),
+      error_logger:info_msg("Could not listen on port 9418: ~p~n", [Reason]),
       timer:sleep(5000),
       try_listen(Times - 1)
   end.
@@ -128,18 +128,18 @@ handle_upload_pack_impl(Sock, Host, Header) ->
       port_close(Port),
       ok;
     {error, Reason} ->
-      io:format("Client closed socket because: ~p~n", [Reason]),
+      error_logger:error_msg("Client closed socket because: ~p~n", [Reason]),
       port_command(Port, "0000"),
       port_close(Port),
       ok = gen_tcp:close(Sock)
   end.
 
 handle_upload_pack_nosuchrepo(Sock, Repo) ->
-  io:format("no such repo: ~p~n", [Repo]),
+  error_logger:info_msg("no such repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
   
 handle_upload_pack_permission_denied(Sock, Repo) ->
-  io:format("permission denied to repo: ~p~n", [Repo]),
+  error_logger:info_msg("permission denied to repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
 
 gather_demand(Sock) ->
@@ -228,10 +228,10 @@ readline(Port) ->
       % io:format("readline = ~p~n", [Data]),
       {data, Data};
     Msg ->
-      io:format("unknown message ~p~n", [Msg]),
+      error_logger:error_msg("unknown message ~p~n", [Msg]),
       {error, Msg}
     after 15000 ->
-      io:format("timed out waiting for port~n"),
+      error_logger:error_msg("timed out waiting for port~n"),
       {error, timeout}
   end.
   
@@ -240,7 +240,6 @@ log_initial_clone(Demand, Host, Path) ->
     {match ,_Start, _Length} ->
       ok;
     _Else ->
-      io:format("initial clone: ~p, ~p~n", [Host, Path]),
       ok = log:write("clone", [Host, Path])
   end.
   
