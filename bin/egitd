@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+
+DEFAULT_ERLANG_CODEPATHS = %w[ebin]
+
+def rel(path)
+  File.join(File.join(File.dirname(__FILE__), *%w[..]), path)
+end
+
+def code_paths
+  DEFAULT_ERLANG_CODEPATHS.map {|n| "-pz #{rel(n)}" }.join(" ") + " \\"
+end
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: egitd -c <config-file> [-l <logfile>]"
+  
+  opts.on("-c CONF", "Configuration file") do |x|
+    options[:conf] = x
+  end
+  
+  opts.on("-l LOG", "Log file") do |x|
+    options[:log] = x
+  end
+
+  opts.on("-d", "Run as a daemon") do
+    options[:daemon] = true
+  end
+end.parse!
+
+detached = options[:daemon] ? '-detached' : ''
+log = options[:log] ? "-egitd log '\"#{options[:log]}\"'" : ''
+
+cmd = %Q{erl -boot start_sasl \
+             #{detached} \
+             +Bc \
+             +K true \
+             -smp enable \
+             #{code_paths}
+             -setcookie egitd-#{rand(99999)} \
+             -kernel start_boot_server true \
+             -egitd conf '\"#{options[:conf]}\"' \
+             #{log} \
+             -run egitd start}.squeeze(' ')
+puts cmd
+exec(cmd)
