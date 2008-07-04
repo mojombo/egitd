@@ -62,7 +62,7 @@ handle_method(Sock) ->
           ok = gen_tcp:close(Sock)
       end;
     {error, closed} ->
-      io:format("ping~n")
+      ok
   end.
   
 handle_upload_pack(Sock, Host, Header) ->
