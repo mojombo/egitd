@@ -63,7 +63,7 @@ handle_method(Sock) ->
           ok = gen_tcp:close(Sock)
       end;
     {error, closed} ->
-      ok
+      ok = gen_tcp:close(Sock)
   end.
   
 handle_upload_pack(Sock, Host, Header) ->
