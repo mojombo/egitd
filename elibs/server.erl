@@ -120,8 +120,9 @@ handle_upload_pack_impl(Sock, Host, Header) ->
       % in response to the demand, git-upload-pack will stream out the requested
       % pack information. data completion is denoted by "0000".
       stream_out(Port, Sock),
-  
-      % close connection
+      
+      % close connections
+      port_close(Port),
       ok = gen_tcp:close(Sock);
     {error, closed} ->
       port_command(Port, "0000"),
