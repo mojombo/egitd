@@ -8,6 +8,7 @@ init(Parent) ->
   ets:new(db, [set, named_table]),
   read_conf(),
   init_log(),
+  log:write("start", ["ok"]),
   LSock = try_listen(10),
   proc_lib:init_ack(Parent, {ok, self()}),
   loop(LSock).
