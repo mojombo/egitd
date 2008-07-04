@@ -5,7 +5,9 @@ start_link() ->
   proc_lib:start_link(?MODULE, init, [self()]).
 
 init(Parent) ->
+  ets:new(db, [set, named_table]),
   read_conf(),
+  init_log(),
   LSock = try_listen(10),
   proc_lib:init_ack(Parent, {ok, self()}),
   loop(LSock).
@@ -14,6 +16,13 @@ read_conf() ->
   {ok, Conf} = application:get_env(conf),
   io:format("Using conf file ~p~n", [Conf]),
   conf:read_conf(Conf).
+  
+init_log() ->
+  init_log(application:get_env(log)).
+init_log({ok, Log}) ->
+  log:init_log(Log);
+init_log(undefined) ->
+  ok.
   
 try_listen(0) ->
   io:format("Could not listen on port 9418~n");
@@ -230,7 +239,8 @@ log_initial_clone(Demand, Host, Path) ->
     {match ,_Start, _Length} ->
       ok;
     _Else ->
-      io:format("initial clone: ~p, ~p~n", [Host, Path])
+      io:format("initial clone: ~p, ~p~n", [Host, Path]),
+      ok = log:write("clone", [Host, Path])
   end.
   
 extract_method_name(Header) ->

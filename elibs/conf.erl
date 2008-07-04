@@ -2,11 +2,10 @@
 -export([read_conf/1, convert_path/2, eval_erlang_expr/1, eval_erlang_expr/2, concat/2, namespace3/1]).
 
 read_conf(Conf) ->
-  DB = ets:new(db, [set, named_table]),
   {ok, DataBinary} = file:read_file(Conf),
   DataString = binary_to_list(DataBinary),
   Lines = string:tokens(DataString, "\n"),
-  lists:foreach(fun(Line) -> parse_conf_line(Line, DB) end, Lines).
+  lists:foreach(fun(Line) -> parse_conf_line(Line) end, Lines).
 
 convert_path(Host, Path) ->
   [{Host, {Regex, Transform}}] = ets:lookup(db, Host),
@@ -20,9 +19,9 @@ convert_path(Host, Path) ->
 
 %% INTERNAL
 
-parse_conf_line(Line, DB) ->
+parse_conf_line(Line) ->
   [Host, Regex, Transform] = string:tokens(Line, "\t"),
-  ets:insert(DB, {Host, {Regex, Transform}}).
+  ets:insert(db, {Host, {Regex, Transform}}).
 
 create_binding(Matches) ->
   Modder = fun(M, Acc) ->
