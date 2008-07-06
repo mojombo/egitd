@@ -1,5 +1,6 @@
 -module(conf).
--export([read_conf/1, convert_path/2, eval_erlang_expr/1, eval_erlang_expr/2, concat/2, namespace3/1]).
+-export([read_conf/1, convert_path/2, eval_erlang_expr/1, eval_erlang_expr/2,
+         concat/2, namespace3/1, md5_namespace3/1, hexmod8/1]).
 
 read_conf(Conf) ->
   {ok, DataBinary} = file:read_file(Conf),
@@ -57,3 +58,11 @@ namespace3(Name) ->
   SafeName = Name ++ Name ++ Name,
   [A, B, C | _RestName] = SafeName,
   string:join([[A], [B], [C]], "/").
+  
+md5_namespace3(Name) ->
+  [A, B, C, D, E, F | _T] = md5:hex(Name),
+  [A, B, $/, C, D, $/, E, F].
+  
+hexmod8(Name) ->
+  <<A:4, _:124>> = erlang:md5(Name),
+  A rem 8.
