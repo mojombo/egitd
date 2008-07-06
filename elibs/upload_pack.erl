@@ -33,6 +33,7 @@ convert_path(Sock, Host, Path) ->
       repo_existence(Sock, Host, Path, FullPath);
     {error, nomatch} ->
        error_logger:info_msg("no repo match: ~p~n", [Path]),
+       gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
        ok = gen_tcp:close(Sock)
   end.
 
@@ -43,6 +44,7 @@ repo_existence(Sock, Host, Path, FullPath) ->
       export_ok(Sock, Host, Path, FullPath);
     false ->
       error_logger:info_msg("no such repo: ~p~n", [FullPath]),
+      gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
       ok = gen_tcp:close(Sock)
   end.
 
@@ -54,6 +56,7 @@ export_ok(Sock, Host, Path, FullPath) ->
       make_port(Sock, Host, Path, FullPath);
     false ->
       error_logger:info_msg("permission denied to repo: ~p~n", [FullPath]),
+      gen_tcp:send(Sock, "0048\n*********'\n\nPermission denied. Repository is not public.\n\n*********"),
       ok = gen_tcp:close(Sock)
   end.
 
