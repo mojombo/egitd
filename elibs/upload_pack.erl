@@ -62,8 +62,7 @@ handle_upload_pack_impl(Sock, Host, Header) ->
     {error, closed} ->
       ok = gen_tcp:close(Sock),
       port_command(Port, "0000"),
-      safe_port_close(Port),
-      ok;
+      safe_port_close(Port);
     {error, Reason} ->
       error_logger:error_msg("Client closed socket because: ~p~n", [Reason]),
       ok = gen_tcp:close(Sock),
@@ -126,10 +125,8 @@ stream_out(Port, Sock, Pipe) ->
   {ok, Data, P2} = read_chunk(Port, Pipe),
   gen_tcp:send(Sock, Data),
   case Data =:= <<"0000">> of
-    true ->
-      done;
-    false ->
-      stream_out(Port, Sock, P2)
+    true  -> done;
+    false -> stream_out(Port, Sock, P2)
   end.
   
 read_chunk(Port, Pipe) ->
@@ -197,8 +194,6 @@ extract_repo_path(Header) ->
   
 file_exists(FullPath) ->
   case file:read_file_info(FullPath) of
-    {ok, _Info} ->
-      true;
-    {error, _Reason} ->
-      false
+    {ok, _Info}      -> true;
+    {error, _Reason} -> false
   end.
