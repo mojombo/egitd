@@ -65,4 +65,4 @@ md5_namespace3(Name) ->
   
 hexmod8(Name) ->
   <<A:4, _:124>> = erlang:md5(Name),
-  A rem 8.
+  integer_to_list(A rem 8).
