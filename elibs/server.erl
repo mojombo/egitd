@@ -122,17 +122,25 @@ handle_upload_pack_impl(Sock, Host, Header) ->
       stream_out(Port, Sock),
       
       % close connections
-      port_close(Port),
-      ok = gen_tcp:close(Sock);
+      ok = gen_tcp:close(Sock),
+      safe_port_close(Port);
     {error, closed} ->
+      ok = gen_tcp:close(Sock),
       port_command(Port, "0000"),
-      port_close(Port),
+      safe_port_close(Port),
       ok;
     {error, Reason} ->
       error_logger:error_msg("Client closed socket because: ~p~n", [Reason]),
+      ok = gen_tcp:close(Sock),
       port_command(Port, "0000"),
-      port_close(Port),
-      ok = gen_tcp:close(Sock)
+      safe_port_close(Port)
+  end.
+  
+safe_port_close(Port) ->
+  unlink(Port),
+  try port_close(Port)
+  catch
+    _:_ -> ok
   end.
 
 handle_upload_pack_nosuchrepo(Sock, Repo) ->
