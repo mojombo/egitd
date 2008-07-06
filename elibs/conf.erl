@@ -10,13 +10,15 @@ read_conf(Conf) ->
 
 convert_path(Host, Path) ->
   [{Host, {Regex, Transform}}] = ets:lookup(db, Host),
-  M = re:smatch(Path, Regex),
-  % io:format("smatch(~p, ~p) = ~p~n", [Host, Path, M]),
-  {match, _A, _B, _C, MatchesTuple} = M,
-  Matches = tuple_to_list(MatchesTuple),
-  Binding = create_binding(Matches),
-  % io:format("binding = ~p~n", [Binding]),
-  eval_erlang_expr(Transform, Binding).
+  case re:smatch(Path, Regex) of
+    {match, _A, _B, _C, MatchesTuple} ->
+      Matches = tuple_to_list(MatchesTuple),
+      Binding = create_binding(Matches),
+      % io:format("binding = ~p~n", [Binding]),
+      eval_erlang_expr(Transform, Binding);
+    nomatch ->
+      {error, nomatch}
+  end.
 
 %% INTERNAL
 

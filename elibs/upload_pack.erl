@@ -5,16 +5,25 @@ handle(Sock, Host, Header) ->
   try
     handle_upload_pack_impl(Sock, Host, Header)
   catch
-    throw:{no_such_repo, Repo} ->
-      handle_upload_pack_nosuchrepo(Sock, Repo);
-    throw:{permission_denied, Repo} ->
-      handle_upload_pack_permission_denied(Sock, Repo)
+    throw: {no_repo_match, Repo} ->
+      handle_error_no_repo_match(Sock, Repo);
+    throw: {no_such_repo, Repo} ->
+      handle_error_no_such_repo(Sock, Repo);
+    throw: {permission_denied, Repo} ->
+      handle_error_permission_denied(Sock, Repo)
   end.
 
 handle_upload_pack_impl(Sock, Host, Header) ->
   % extract and normalize the repo path
   {ok, Path} = extract_repo_path(Header),
-  {ok, FullPath} = conf:convert_path(Host, Path),
+  
+  {Label, Value} = conf:convert_path(Host, Path),
+  case {Label, Value} of
+    {ok, ConvertedFullPath} -> ok;
+    {error, nomatch} -> throw({no_repo_match, Path})
+  end,
+  
+  FullPath = Value,
   
   % io:format("fullpath = ~p~n", [FullPath]),
   
@@ -77,11 +86,15 @@ safe_port_close(Port) ->
     _:_ -> ok
   end.
 
-handle_upload_pack_nosuchrepo(Sock, Repo) ->
+handle_error_no_repo_match(Sock, Repo) ->
+  error_logger:info_msg("no repo match: ~p~n", [Repo]),
+  ok = gen_tcp:close(Sock).
+
+handle_error_no_such_repo(Sock, Repo) ->
   error_logger:info_msg("no such repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
   
-handle_upload_pack_permission_denied(Sock, Repo) ->
+handle_error_permission_denied(Sock, Repo) ->
   error_logger:info_msg("permission denied to repo: ~p~n", [Repo]),
   ok = gen_tcp:close(Sock).
 
