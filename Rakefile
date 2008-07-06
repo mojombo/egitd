@@ -11,12 +11,3 @@ end
 task :console do
   sh "erl +Bc +K true -smp enable -pz ./ebin/ -sname local_console_#{$$} -kernel start_boot_server true"
 end
-
-task :go do
-  sh "erl +Bc +K true -smp enable \
-      -setcookie abc123 \
-      -pz ./ebin/ -sname local_console_#{$$} \
-      -kernel start_boot_server true \
-      -egitd conf '\"egitd.conf\"' \
-      -run egitd start".squeeze(' ')
-end
