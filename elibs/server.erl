@@ -53,18 +53,18 @@ handle_method(Sock) ->
       Method = extract_method_name(Header),
   
       % dispatch
-      case Method of
-        {ok, "upload-pack"} ->
-          handle_upload_pack(Sock, Host, Header);
-        {ok, "receive-pack"} ->
-          receive_pack:handle(Sock, Host, Header);
-        invalid ->
-          gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
-          ok = gen_tcp:close(Sock)
-      end;
+      handle_method_dispatch(Method, Sock, Host, Header);
     {error, closed} ->
       ok = gen_tcp:close(Sock)
   end.
+  
+handle_method_dispatch({ok, "upload-pack"}, Sock, Host, Header) ->
+  handle_upload_pack(Sock, Host, Header);
+handle_method_dispatch({ok, "receive-pack"}, Sock, Host, Header) ->
+  receive_pack:handle(Sock, Host, Header);
+handle_method_dispatch(invalid, Sock, _Host, _Header) ->
+  gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
+  ok = gen_tcp:close(Sock).
   
 handle_upload_pack(Sock, Host, Header) ->
   try
