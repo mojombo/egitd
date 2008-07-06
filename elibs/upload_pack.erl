@@ -1,73 +1,85 @@
 -module(upload_pack).
 -export([handle/3]).
 
+%****************************************************************************
+%
+% Entry
+%
+%****************************************************************************
+
 handle(Sock, Host, Header) ->
-  try
-    handle_upload_pack_impl(Sock, Host, Header)
-  catch
-    throw: {no_repo_match, Repo} ->
-      handle_error_no_repo_match(Sock, Repo);
-    throw: {no_such_repo, Repo} ->
-      handle_error_no_such_repo(Sock, Repo);
-    throw: {permission_denied, Repo} ->
-      handle_error_permission_denied(Sock, Repo)
+  extract_repo_path(Sock, Host, Header).
+
+%****************************************************************************
+%
+% Main flow
+%
+%****************************************************************************
+
+% Extract the repo from the header.
+extract_repo_path(Sock, Host, Header) ->
+  case regexp:match(Header, " /[^\000]+\000") of
+    {match, Start, Length} ->
+      Path = string:substr(Header, Start + 2, Length - 3),
+      convert_path(Sock, Host, Path);
+    _Else ->
+      invalid
   end.
 
-handle_upload_pack_impl(Sock, Host, Header) ->
-  % extract and normalize the repo path
-  {ok, Path} = extract_repo_path(Header),
-  
-  {Label, Value} = conf:convert_path(Host, Path),
-  case {Label, Value} of
-    {ok, ConvertedFullPath} -> ok;
-    {error, nomatch} -> throw({no_repo_match, Path})
-  end,
-  
-  FullPath = Value,
-  
-  % io:format("fullpath = ~p~n", [FullPath]),
-  
-  % check for repo existence
+% Convert the repo path to an absolute path as specified by the config file.
+convert_path(Sock, Host, Path) ->
+  case conf:convert_path(Host, Path) of
+    {ok, FullPath} ->
+      repo_existence(Sock, Host, Path, FullPath);
+    {error, nomatch} ->
+       error_logger:info_msg("no repo match: ~p~n", [Path]),
+       ok = gen_tcp:close(Sock)
+  end.
+
+% Ensure that the repo exists.
+repo_existence(Sock, Host, Path, FullPath) ->
   case file_exists(FullPath) of
-    false -> throw({no_such_repo, FullPath});
-    true -> ok
-  end,
-  
-  % check for git-daemon-export-ok file
+    true ->
+      export_ok(Sock, Host, Path, FullPath);
+    false ->
+      error_logger:info_msg("no such repo: ~p~n", [FullPath]),
+      ok = gen_tcp:close(Sock)
+  end.
+
+% Ensure that a 'git-daemon-export-ok' file is present in the repo.
+export_ok(Sock, Host, Path, FullPath) ->
   GitDaemonExportOkFilePath = filename:join([FullPath, "git-daemon-export-ok"]),
   case file_exists(GitDaemonExportOkFilePath) of
-    false -> throw({permission_denied, GitDaemonExportOkFilePath});
-    true -> ok
-  end,
-  
-  % make the port
+    true ->
+      make_port(Sock, Host, Path, FullPath);
+    false ->
+      error_logger:info_msg("permission denied to repo: ~p~n", [FullPath]),
+      ok = gen_tcp:close(Sock)
+  end.
+
+% Create the port to 'git upload-pack'.
+make_port(Sock, Host, Path, FullPath) ->
   Command = "git upload-pack " ++ FullPath,
   Port = open_port({spawn, Command}, [binary]),
+  send_index_to_client(Port, Sock, Host, Path).
   
-  % the initial output from git-upload-pack lists the SHA1s of each head.
-  % data completion is denoted by "0000" on it's own line.
-  % this is sent back immediately to the client.
+% The initial output from git-upload-pack lists the SHA1s of each head.
+% data completion is denoted by "0000" on it's own line.
+% This is sent back immediately to the client.
+send_index_to_client(Port, Sock, Host, Path) ->
   Index = gather_out(Port),
-  % io:format("index = ~p~n", [Index]),
   gen_tcp:send(Sock, Index),
+  get_demand_from_client(Port, Sock, Host, Path).
   
-  % once the client receives the index data, it will demand that specific
-  % revisions be packaged and sent back. this demand will be forwarded to
-  % git-upload-pack.
+% Once the client receives the index data, it will demand that specific
+% revisions be packaged and sent back. This demand will be forwarded to
+% git-upload-pack.
+get_demand_from_client(Port, Sock, Host, Path) ->  
   case gather_demand(Sock) of
     {ok, Demand} ->
       log_initial_clone(Demand, Host, Path),
-      
-      % io:format("+++~n~p~n+++~n", [Demand]),
       port_command(Port, Demand),
-  
-      % in response to the demand, git-upload-pack will stream out the requested
-      % pack information. data completion is denoted by "0000".
-      stream_out(Port, Sock),
-      
-      % close connections
-      ok = gen_tcp:close(Sock),
-      safe_port_close(Port);
+      send_pack_to_client(Port, Sock);
     {error, closed} ->
       ok = gen_tcp:close(Sock),
       port_command(Port, "0000"),
@@ -79,24 +91,26 @@ handle_upload_pack_impl(Sock, Host, Header) ->
       safe_port_close(Port)
   end.
   
+% In response to the demand, git-upload-pack will stream out the requested
+% pack information. Data completion is denoted by "0000".
+send_pack_to_client(Port, Sock) ->
+  stream_out(Port, Sock),
+  ok = gen_tcp:close(Sock),
+  safe_port_close(Port).
+
+%****************************************************************************
+%
+% Utility functions
+%
+%****************************************************************************
+
+% Safely unlink and close the port. If the port is not open, this is a noop.
 safe_port_close(Port) ->
   unlink(Port),
   try port_close(Port)
   catch
     _:_ -> ok
   end.
-
-handle_error_no_repo_match(Sock, Repo) ->
-  error_logger:info_msg("no repo match: ~p~n", [Repo]),
-  ok = gen_tcp:close(Sock).
-
-handle_error_no_such_repo(Sock, Repo) ->
-  error_logger:info_msg("no such repo: ~p~n", [Repo]),
-  ok = gen_tcp:close(Sock).
-  
-handle_error_permission_denied(Sock, Repo) ->
-  error_logger:info_msg("permission denied to repo: ~p~n", [Repo]),
-  ok = gen_tcp:close(Sock).
 
 gather_demand(Sock) ->
   gather_demand(Sock, "").
@@ -195,14 +209,6 @@ log_initial_clone(Demand, Host, Path) ->
       ok;
     _Else ->
       ok = log:write("clone", [Host, Path])
-  end.
-  
-extract_repo_path(Header) ->
-  case regexp:match(Header, " /[^\000]+\000") of
-    {match, Start, Length} ->
-      {ok, string:substr(Header, Start + 2, Length - 3)};
-    _Else ->
-      invalid
   end.
   
 file_exists(FullPath) ->
