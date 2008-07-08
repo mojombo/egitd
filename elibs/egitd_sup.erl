@@ -15,6 +15,13 @@ start_link(Args) ->
   supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
   
 init([]) ->
+  case application:get_env(pidfile) of
+    {ok, Location} ->
+      Pid = os:getpid(),
+      ok = file:write_file(Location, list_to_binary(Pid));
+    undefined -> ok
+  end,
+  
   {ok, {{one_for_one, 100, 300},
     [{server,
        {server, start_link, []},

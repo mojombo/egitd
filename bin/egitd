@@ -23,6 +23,10 @@ OptionParser.new do |opts|
   opts.on("-l LOG", "Log file") do |x|
     options[:log] = x
   end
+  
+  opts.on("-P PIDFILE", "Pid file") do |x|
+    options[:pidfile] = x
+  end
 
   opts.on("-d", "Run as a daemon") do
     options[:daemon] = true
@@ -31,9 +35,11 @@ end.parse!
 
 detached = options[:daemon] ? '-detached' : ''
 log = options[:log] ? "-egitd log '\"#{options[:log]}\"'" : ''
+pidfile = options[:pidfile] ? "-egitd pidfile '\"#{options[:pidfile]}\"'" : ''
 
 cmd = %Q{erl -boot start_sasl \
              #{detached} \
+             #{pidfile} \
              +Bc \
              +K true \
              -smp enable \
