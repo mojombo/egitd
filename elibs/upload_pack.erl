@@ -43,6 +43,16 @@ repo_existence(Sock, Host, Path, FullPath) ->
     true ->
       export_ok(Sock, Host, Path, FullPath);
     false ->
+      repo_existence_ext(Sock, Host, Path, FullPath)
+  end.
+  
+% The repo may always be specified without .git on the end
+repo_existence_ext(Sock, Host, Path, FullPath) ->
+  FullPathExt = FullPath ++ ".git",
+  case file_exists(FullPathExt) of
+    true ->
+      export_ok(Sock, Host, Path, FullPathExt);
+    false ->
       error_logger:info_msg("no such repo: ~p~n", [FullPath]),
       gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
       ok = gen_tcp:close(Sock)
