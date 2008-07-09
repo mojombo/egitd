@@ -88,7 +88,7 @@ get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
   case gather_request(Sock, RequestPipe) of
     {ok, Request, RequestPipe2} ->
       % io:format("req = ~p~n", [Request]),
-      % log_initial_clone(Request, Host, Path),
+      log_request(Request, Host, Path),
       port_command(Port, Request),
       {ok, RequestPipe3} = check_request_termination(RequestPipe2, Sock, Port),
       send_response_to_client(RequestPipe3, ResponsePipe, Port, Sock, Host, Path);
@@ -115,7 +115,7 @@ check_request_termination(RequestPipe, Sock, Port) ->
       % io:format("success"),
       port_command(Port, "0009done\n"),
       {ok, RequestPipe};
-    A ->
+    _ ->
       % io:format("~p~n", [A]),
       case pipe:peek(9, RequestPipe) of
         {ok, <<"0009done\n">>} ->
@@ -123,7 +123,7 @@ check_request_termination(RequestPipe, Sock, Port) ->
           port_command(Port, "0009done\n"),
           {ok, _Data, P2} = pipe:read(9, RequestPipe),
           {ok, P2};
-        B ->
+        _ ->
           % io:format("~p~n", [B]),
           {ok, RequestPipe}
       end
@@ -259,13 +259,21 @@ readline(Port) ->
       {error, timeout}
   end.
   
-% log_initial_clone(Demand, Host, Path) ->
-%   case regexp:first_match(Demand, "have") of
-%     {match ,_Start, _Length} ->
-%       ok;
-%     _Else ->
-%       ok = log:write("clone", [Host, Path])
-%   end.
+log_request(Request, Host, Path) ->
+  case regexp:first_match(Request, "^....want") of
+    {match ,_Start, _Length} ->
+      log_initial_clone(Request, Host, Path);
+    _Else ->
+      ok
+  end.
+  
+log_initial_clone(Request, Host, Path) ->
+  case regexp:first_match(Request, "have") of
+    {match ,_Start, _Length} ->
+      ok;
+    _Else ->
+      ok = log:write("clone", [Host, Path])
+  end.
   
 file_exists(FullPath) ->
   case file:read_file_info(FullPath) of
