@@ -3,12 +3,24 @@ egitd
   
 egitd is an Erlang git-daemon implementation that provides a more flexible, scalable, and loggable way to serve public git repositories.
 
-INSTALL
 
-$ git clone git://github.com/mojombo/egitd.git
+INSTALL
+-------
+
+$ git clone git@github.com:mojombo/egitd.git
 $ cd egitd
 $ rake
 
-RUN
 
-$ rake go
+RUN
+---
+
+$ bin/egitd -c <path to conf file> -l <path to log file>
+
+
+CONF FILE
+---------
+
+The config file specifies the mapping between specified repo name and file location.
+
+github.com        (.+)/(.+)       "/data/git/repositories/" ++ Match1 ++ "/" ++ Match2.
