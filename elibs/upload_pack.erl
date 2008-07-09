@@ -81,6 +81,7 @@ make_port(Sock, Host, Path, FullPath) ->
 % This is sent back immediately to the client.
 send_index_to_client(Port, Sock, Host, Path) ->
   Index = gather_out(Port),
+  io:format("index = ~p~n", [Index]),
   gen_tcp:send(Sock, Index),
   get_demand_from_client(Port, Sock, Host, Path).
   
@@ -90,6 +91,7 @@ send_index_to_client(Port, Sock, Host, Path) ->
 get_demand_from_client(Port, Sock, Host, Path) ->  
   case gather_demand(Sock) of
     {ok, Demand} ->
+      io:format("demand = ~p~n", [Demand]),
       log_initial_clone(Demand, Host, Path),
       port_command(Port, Demand),
       send_pack_to_client(Port, Sock);
@@ -126,20 +128,16 @@ safe_port_close(Port) ->
   end.
 
 gather_demand(Sock) ->
-  gather_demand(Sock, "").
-gather_demand(Sock, DataSoFar) ->
-  case gen_tcp:recv(Sock, 0) of
-    {ok, Data} ->
-      % io:format("data = ~p~n", [Data]),
-      TotalData = DataSoFar ++ Data,
-      case regexp:first_match(TotalData, "0009done\n$") of
-        {match, _Start, _Length} ->
-          {ok, TotalData};
-        _Else ->
-          gather_demand(Sock, TotalData)
-      end;
-    {error, Reason} ->
-      {error, Reason}
+  gather_demand(Sock, [], pipe:new()).
+gather_demand(Sock, DataSoFar, Pipe) ->
+  {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
+  % io:format("+++~n~p~n+++~n", [Data]),
+  TotalData = lists:append(DataSoFar, [Data]),
+  case Data =:= <<"0000">> of
+    true ->
+      {ok, binary_to_list(list_to_binary(TotalData))};
+    false ->
+      gather_demand(Sock, TotalData, P2)
   end.
 
 gather_out(Port) ->
@@ -156,19 +154,67 @@ gather_out(Port, DataSoFar, Pipe) ->
       gather_out(Port, TotalData, P2)
   end.
   
+%****************************************************************************
+% stream_out
+
 stream_out(Port, Sock) ->
   stream_out(Port, Sock, pipe:new()).
   
 stream_out(Port, Sock, Pipe) ->
   % io:format("stream out "),
-  % io:format("+++~n~p~n+++~n", [Data]),
   {ok, Data, P2} = read_chunk(Port, Pipe),
+  io:format("+++~n~p~n+++~n", [Data]),
   gen_tcp:send(Sock, Data),
   case Data =:= <<"0000">> of
     true  -> done;
     false -> stream_out(Port, Sock, P2)
   end.
+
+%****************************************************************************
+% read_chunk_from_socket
+
+read_chunk_from_socket(Sock, Pipe) ->
+  case pipe:size(Pipe) >= 4 of
+    true ->
+      {ok, ChunkSizeHex, P2} = pipe:read(4, Pipe),
+      % io:format("chunk size hex = ~p~n", [ChunkSizeHex]),
+      read_chunk_body_from_socket(ChunkSizeHex, Sock, P2);
+    false ->
+      {data, Data} = read_from_socket(Sock),
+      {ok, P2} = pipe:write(Data, Pipe),
+      read_chunk_from_socket(Sock, P2)
+  end.
+
+read_chunk_body_from_socket(<<"0000">>, _Sock, Pipe) ->
+  {ok, <<"0000">>, Pipe};
   
+read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
+  ChunkSize = convert_chunk_size(ChunkSizeHex),
+  % io:format("chunk size = ~p~n", [ChunkSize]),
+  case pipe:read(ChunkSize, Pipe) of
+    {ok, Bin, P2} ->
+      % io:format("chunk body = ~p~n", [Bin]),
+      Data = concat_binary([ChunkSizeHex, Bin]),
+      {ok, Data, P2};
+    eof ->
+      % io:format("chunk body eof~n", []),
+      {data, Data} = read_from_socket(Sock),
+      {ok, P2} = pipe:write(Data, Pipe),
+      read_chunk_body_from_socket(ChunkSizeHex, Sock, P2)
+  end.
+  
+read_from_socket(Sock) ->
+  case gen_tcp:recv(Sock, 0) of
+    {ok, Data} ->
+      % io:format("data = ~p~n", [Data]),
+      {data, list_to_binary(Data)};
+    {error, Reason} ->
+      {error, Reason}
+  end.
+  
+%****************************************************************************
+% read_chunk (port)
+
 read_chunk(Port, Pipe) ->
   case pipe:size(Pipe) >= 4 of
     true ->
