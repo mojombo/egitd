@@ -31,7 +31,7 @@
 % SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 -module(pipe).
--export([new/0, write/2, read/2, size/1]).
+-export([new/0, write/2, read/2, peek/2, size/1]).
 
 -record(pipe, {pos = 0, size = 0, queue = queue:new()}).
 
@@ -50,6 +50,17 @@ read(Num, Pipe) ->
       Bin = list_to_binary(Acc),
       P2 = Pipe#pipe{size = Size - Num, queue = Q2},
       {ok, Bin, P2};
+    false ->
+      eof
+  end.
+
+peek(Num, Pipe) ->
+  #pipe{size = Size, queue = Q1} = Pipe,
+  case Num =< Size of
+    true ->
+      {Acc, _} = read_internal([], Num, Q1),
+      Bin = list_to_binary(Acc),
+      {ok, Bin};
     false ->
       eof
   end.

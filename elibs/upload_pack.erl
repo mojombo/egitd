@@ -74,44 +74,34 @@ export_ok(Sock, Host, Path, FullPath) ->
 make_port(Sock, Host, Path, FullPath) ->
   Command = "git upload-pack " ++ FullPath,
   Port = open_port({spawn, Command}, [binary]),
-  send_index_to_client(Port, Sock, Host, Path).
+  send_response_to_client(pipe:new(), pipe:new(), Port, Sock, Host, Path).
   
-% The initial output from git-upload-pack lists the SHA1s of each head.
-% data completion is denoted by "0000" on it's own line.
-% This is sent back immediately to the client.
-send_index_to_client(Port, Sock, Host, Path) ->
-  Index = gather_out(Port),
-  io:format("index = ~p~n", [Index]),
-  gen_tcp:send(Sock, Index),
-  get_demand_from_client(Port, Sock, Host, Path).
-  
-% Once the client receives the index data, it will demand that specific
-% revisions be packaged and sent back. This demand will be forwarded to
-% git-upload-pack.
-get_demand_from_client(Port, Sock, Host, Path) ->  
-  case gather_demand(Sock) of
-    {ok, Demand} ->
-      io:format("demand = ~p~n", [Demand]),
-      log_initial_clone(Demand, Host, Path),
-      port_command(Port, Demand),
-      send_pack_to_client(Port, Sock);
+% Send a response to the client
+send_response_to_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
+  % io:format("send response~n"),
+  stream_out(Port, Sock, ResponsePipe),
+  get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path).
+
+% Read a request from a client
+get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
+  % io:format("get request~n"),
+  case gather_request(Sock, RequestPipe) of
+    {ok, Request, RequestPipe2} ->
+      % io:format("req = ~p~n", [Request]),
+      % log_initial_clone(Request, Host, Path),
+      port_command(Port, Request),
+      {ok, RequestPipe3} = check_request_termination(RequestPipe2, Sock, Port),
+      send_response_to_client(RequestPipe3, ResponsePipe, Port, Sock, Host, Path);
     {error, closed} ->
       ok = gen_tcp:close(Sock),
-      port_command(Port, "0000"),
+      % port_command(Port, "0000"),
       safe_port_close(Port);
     {error, Reason} ->
       error_logger:error_msg("Client closed socket because: ~p~n", [Reason]),
       ok = gen_tcp:close(Sock),
-      port_command(Port, "0000"),
+      % port_command(Port, "0000"),
       safe_port_close(Port)
   end.
-  
-% In response to the demand, git-upload-pack will stream out the requested
-% pack information. Data completion is denoted by "0000".
-send_pack_to_client(Port, Sock) ->
-  stream_out(Port, Sock),
-  ok = gen_tcp:close(Sock),
-  safe_port_close(Port).
 
 %****************************************************************************
 %
@@ -119,6 +109,26 @@ send_pack_to_client(Port, Sock) ->
 %
 %****************************************************************************
 
+check_request_termination(RequestPipe, Sock, Port) ->
+  case gen_tcp:recv(Sock, 9, 10) of
+    {ok, "0009done\n"} ->
+      % io:format("success"),
+      port_command(Port, "0009done\n"),
+      {ok, RequestPipe};
+    A ->
+      % io:format("~p~n", [A]),
+      case pipe:peek(9, RequestPipe) of
+        {ok, <<"0009done\n">>} ->
+          % io:format("success"),
+          port_command(Port, "0009done\n"),
+          {ok, _Data, P2} = pipe:read(9, RequestPipe),
+          {ok, P2};
+        B ->
+          % io:format("~p~n", [B]),
+          {ok, RequestPipe}
+      end
+  end.
+  
 % Safely unlink and close the port. If the port is not open, this is a noop.
 safe_port_close(Port) ->
   unlink(Port),
@@ -127,43 +137,30 @@ safe_port_close(Port) ->
     _:_ -> ok
   end.
 
-gather_demand(Sock) ->
-  gather_demand(Sock, [], pipe:new()).
-gather_demand(Sock, DataSoFar, Pipe) ->
-  {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
-  % io:format("+++~n~p~n+++~n", [Data]),
-  TotalData = lists:append(DataSoFar, [Data]),
-  case Data =:= <<"0000">> of
-    true ->
-      {ok, binary_to_list(list_to_binary(TotalData))};
-    false ->
-      gather_demand(Sock, TotalData, P2)
-  end.
-
-gather_out(Port) ->
-  gather_out(Port, [], pipe:new()).
-gather_out(Port, DataSoFar, Pipe) ->
-  % io:format("gather-out "),
-  {ok, Data, P2} = read_chunk(Port, Pipe),
-  % io:format("+++~n~p~n+++~n", [Data]),
-  TotalData = lists:append(DataSoFar, [Data]),
-  case Data =:= <<"0000">> of
-    true ->
-      list_to_binary(TotalData);
-    false ->
-      gather_out(Port, TotalData, P2)
+gather_request(Sock, Pipe) ->
+  gather_request(Sock, [], Pipe).
+gather_request(Sock, DataSoFar, Pipe) ->
+  try
+    {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
+    % io:format("~p~n", [Data]),
+    TotalData = lists:append(DataSoFar, [Data]),
+    case Data =:= <<"0000">> orelse Data =:= <<"0009done\n">> of
+      true ->
+        {ok, binary_to_list(list_to_binary(TotalData)), P2};
+      false ->
+        gather_request(Sock, TotalData, P2)
+    end
+  catch
+    _:_ -> {error, closed}
   end.
   
 %****************************************************************************
 % stream_out
 
-stream_out(Port, Sock) ->
-  stream_out(Port, Sock, pipe:new()).
-  
 stream_out(Port, Sock, Pipe) ->
   % io:format("stream out "),
   {ok, Data, P2} = read_chunk(Port, Pipe),
-  io:format("+++~n~p~n+++~n", [Data]),
+  % io:format("~p~n", [Data]),
   gen_tcp:send(Sock, Data),
   case Data =:= <<"0000">> of
     true  -> done;
@@ -206,7 +203,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
 read_from_socket(Sock) ->
   case gen_tcp:recv(Sock, 0) of
     {ok, Data} ->
-      % io:format("data = ~p~n", [Data]),
+      % io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
     {error, Reason} ->
       {error, Reason}
@@ -262,13 +259,13 @@ readline(Port) ->
       {error, timeout}
   end.
   
-log_initial_clone(Demand, Host, Path) ->
-  case regexp:first_match(Demand, "have") of
-    {match ,_Start, _Length} ->
-      ok;
-    _Else ->
-      ok = log:write("clone", [Host, Path])
-  end.
+% log_initial_clone(Demand, Host, Path) ->
+%   case regexp:first_match(Demand, "have") of
+%     {match ,_Start, _Length} ->
+%       ok;
+%     _Else ->
+%       ok = log:write("clone", [Host, Path])
+%   end.
   
 file_exists(FullPath) ->
   case file:read_file_info(FullPath) of
