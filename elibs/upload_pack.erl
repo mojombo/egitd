@@ -78,13 +78,13 @@ make_port(Sock, Host, Path, FullPath) ->
   
 % Send a response to the client
 send_response_to_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
-  % io:format("send response~n"),
+  io:format("send response~n"),
   stream_out(Port, Sock, ResponsePipe),
   get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path).
 
 % Read a request from a client
 get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
-  % io:format("get request~n"),
+  io:format("get request~n"),
   case gather_request(Sock, RequestPipe) of
     {ok, Request, RequestPipe2} ->
       % io:format("req = ~p~n", [Request]),
@@ -137,14 +137,17 @@ safe_port_close(Port) ->
     _:_ -> ok
   end.
 
+%****************************************************************************
+% gather_request
+
 gather_request(Sock, Pipe) ->
   gather_request(Sock, [], Pipe).
 gather_request(Sock, DataSoFar, Pipe) ->
   try
     {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
-    % io:format("~p~n", [Data]),
+    io:format("~p~n", [Data]),
     TotalData = lists:append(DataSoFar, [Data]),
-    case Data =:= <<"0000">> orelse Data =:= <<"0009done\n">> of
+    case pipe:size(P2) == 0 andalso (Data =:= <<"0000">> orelse Data =:= <<"0009done\n">>) of
       true ->
         {ok, binary_to_list(list_to_binary(TotalData)), P2};
       false ->
@@ -160,9 +163,9 @@ gather_request(Sock, DataSoFar, Pipe) ->
 stream_out(Port, Sock, Pipe) ->
   % io:format("stream out "),
   {ok, Data, P2} = read_chunk(Port, Pipe),
-  % io:format("~p~n", [Data]),
+  io:format("~p~n", [Data]),
   gen_tcp:send(Sock, Data),
-  case Data =:= <<"0000">> of
+  case pipe:size(P2) =:= 0 andalso Data =:= <<"0000">> of
     true  -> done;
     false -> stream_out(Port, Sock, P2)
   end.
@@ -203,7 +206,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
 read_from_socket(Sock) ->
   case gen_tcp:recv(Sock, 0) of
     {ok, Data} ->
-      % io:format("socket = ~p~n", [Data]),
+      io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
     {error, Reason} ->
       {error, Reason}
@@ -249,7 +252,7 @@ convert_chunk_size(ChunkSizeHex) ->
 readline(Port) ->
   receive
     {Port, {data, Data}} ->
-      % io:format("readline = ~p~n", [Data]),
+      io:format("port = ~p~n", [Data]),
       {data, Data};
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
