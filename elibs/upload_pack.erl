@@ -79,8 +79,13 @@ make_port(Sock, Host, Path, FullPath) ->
 % Send a response to the client
 send_response_to_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
   io:format("send response~n"),
-  stream_out(Port, Sock, ResponsePipe),
-  get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path).
+  try
+    stream_out(Port, Sock, ResponsePipe),
+    get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path)
+  catch
+    throw:{error, timeout} ->
+      get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path)
+  end.
 
 % Read a request from a client
 get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
@@ -165,7 +170,7 @@ stream_out(Port, Sock, Pipe) ->
   {ok, Data, P2} = read_chunk(Port, Pipe),
   io:format("~p~n", [Data]),
   gen_tcp:send(Sock, Data),
-  case pipe:size(P2) =:= 0 andalso Data =:= <<"0000">> of
+  case pipe:size(P2) =:= 0 andalso (Data =:= <<"0000">> orelse Data =:= <<"0008NAK\n">>) of
     true  -> done;
     false -> stream_out(Port, Sock, P2)
   end.
@@ -257,9 +262,9 @@ readline(Port) ->
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
       {error, Msg}
-    after 15000 ->
+    after 100 ->
       error_logger:error_msg("timed out waiting for port~n"),
-      {error, timeout}
+      throw({error, timeout})
   end.
   
 log_request(Request, Host, Path) ->
