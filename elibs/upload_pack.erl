@@ -74,30 +74,41 @@ export_ok(Sock, Host, Path, FullPath) ->
 make_port(Sock, Host, Path, FullPath) ->
   Command = "git upload-pack " ++ FullPath,
   Port = open_port({spawn, Command}, [binary]),
-  send_response_to_client(pipe:new(), pipe:new(), Port, Sock, Host, Path).
+  send_response_to_client(more, pipe:new(), pipe:new(), Port, Sock, Host, Path).
   
 % Send a response to the client
-send_response_to_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
+send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
   io:format("send response~n"),
   try
-    stream_out(Port, Sock, ResponsePipe),
-    get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path)
+    stream_out(Port, Sock, ResponsePipe)
   catch
     throw:{error, timeout} ->
-      get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path)
+      io:format("stream out timed out~n"),
+      ok
+  end,
+  case Status of
+    more ->
+      get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path);
+    done ->
+      send_response_to_client(done, RequestPipe, ResponsePipe, Port, Sock, Host, Path)
   end.
 
 % Read a request from a client
 get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
   io:format("get request~n"),
   case gather_request(Sock, RequestPipe) of
-    {ok, Request, RequestPipe2} ->
-      % io:format("req = ~p~n", [Request]),
+    {more, Request, RequestPipe2} ->
+      io:format("req = ~p~n", [Request]),
       log_request(Request, Host, Path),
       port_command(Port, Request),
-      {ok, RequestPipe3} = check_request_termination(RequestPipe2, Sock, Port),
-      send_response_to_client(RequestPipe3, ResponsePipe, Port, Sock, Host, Path);
+      send_response_to_client(more, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
+    {done, Request, RequestPipe2} ->
+      io:format("req = ~p~n", [Request]),
+      log_request(Request, Host, Path),
+      port_command(Port, Request),
+      send_response_to_client(done, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
     {error, closed} ->
+      io:format("socket closed~n"),
       ok = gen_tcp:close(Sock),
       % port_command(Port, "0000"),
       safe_port_close(Port);
@@ -114,25 +125,25 @@ get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
 %
 %****************************************************************************
 
-check_request_termination(RequestPipe, Sock, Port) ->
-  case gen_tcp:recv(Sock, 9, 10) of
-    {ok, "0009done\n"} ->
-      % io:format("success"),
-      port_command(Port, "0009done\n"),
-      {ok, RequestPipe};
-    _ ->
-      % io:format("~p~n", [A]),
-      case pipe:peek(9, RequestPipe) of
-        {ok, <<"0009done\n">>} ->
-          % io:format("success"),
-          port_command(Port, "0009done\n"),
-          {ok, _Data, P2} = pipe:read(9, RequestPipe),
-          {ok, P2};
-        _ ->
-          % io:format("~p~n", [B]),
-          {ok, RequestPipe}
-      end
-  end.
+% check_request_termination(RequestPipe, Sock, Port) ->
+%   case gen_tcp:recv(Sock, 9, 10) of
+%     {ok, "0009done\n"} ->
+%       % io:format("success"),
+%       port_command(Port, "0009done\n"),
+%       {ok, RequestPipe};
+%     _ ->
+%       % io:format("~p~n", [A]),
+%       case pipe:peek(9, RequestPipe) of
+%         {ok, <<"0009done\n">>} ->
+%           % io:format("success"),
+%           port_command(Port, "0009done\n"),
+%           {ok, _Data, P2} = pipe:read(9, RequestPipe),
+%           {ok, P2};
+%         _ ->
+%           % io:format("~p~n", [B]),
+%           {ok, RequestPipe}
+%       end
+%   end.
   
 % Safely unlink and close the port. If the port is not open, this is a noop.
 safe_port_close(Port) ->
@@ -152,10 +163,12 @@ gather_request(Sock, DataSoFar, Pipe) ->
     {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
     io:format("~p~n", [Data]),
     TotalData = lists:append(DataSoFar, [Data]),
-    case pipe:size(P2) == 0 andalso (Data =:= <<"0000">> orelse Data =:= <<"0009done\n">>) of
+    if
+      Data =:= <<"0000">> ->
+        {more, binary_to_list(list_to_binary(TotalData)), P2};
+      Data =:= <<"0009done\n">> ->
+        {done, binary_to_list(list_to_binary(TotalData)), P2};
       true ->
-        {ok, binary_to_list(list_to_binary(TotalData)), P2};
-      false ->
         gather_request(Sock, TotalData, P2)
     end
   catch
@@ -170,7 +183,7 @@ stream_out(Port, Sock, Pipe) ->
   {ok, Data, P2} = read_chunk(Port, Pipe),
   io:format("~p~n", [Data]),
   gen_tcp:send(Sock, Data),
-  case pipe:size(P2) =:= 0 andalso (Data =:= <<"0000">> orelse Data =:= <<"0008NAK\n">>) of
+  case Data =:= <<"0000">> of
     true  -> done;
     false -> stream_out(Port, Sock, P2)
   end.
@@ -209,7 +222,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
   end.
   
 read_from_socket(Sock) ->
-  case gen_tcp:recv(Sock, 0) of
+  case gen_tcp:recv(Sock, 0, 100) of
     {ok, Data} ->
       io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
