@@ -90,7 +90,9 @@ send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Pat
     more ->
       get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path);
     done ->
-      send_response_to_client(done, RequestPipe, ResponsePipe, Port, Sock, Host, Path)
+      ok = gen_tcp:close(Sock),
+      safe_port_close(Port)
+      % send_response_to_client(done, RequestPipe, ResponsePipe, Port, Sock, Host, Path)
   end.
 
 % Read a request from a client
@@ -248,7 +250,7 @@ readline(Port) ->
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
       {error, Msg}
-    after 100 ->
+    after 1000 ->
       error_logger:error_msg("timed out waiting for port~n"),
       throw({error, timeout})
   end.
