@@ -97,25 +97,18 @@ send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Pat
 get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
   io:format("get request~n"),
   case gather_request(Sock, RequestPipe) of
-    {more, Request, RequestPipe2} ->
+    {Status, Request, RequestPipe2} ->
       io:format("req = ~p~n", [Request]),
       log_request(Request, Host, Path),
       port_command(Port, Request),
-      send_response_to_client(more, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
-    {done, Request, RequestPipe2} ->
-      io:format("req = ~p~n", [Request]),
-      log_request(Request, Host, Path),
-      port_command(Port, Request),
-      send_response_to_client(done, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
+      send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
     {error, closed} ->
       io:format("socket closed~n"),
       ok = gen_tcp:close(Sock),
-      % port_command(Port, "0000"),
       safe_port_close(Port);
     {error, Reason} ->
       error_logger:error_msg("Client closed socket because: ~p~n", [Reason]),
       ok = gen_tcp:close(Sock),
-      % port_command(Port, "0000"),
       safe_port_close(Port)
   end.
 
@@ -124,26 +117,6 @@ get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
 % Utility functions
 %
 %****************************************************************************
-
-% check_request_termination(RequestPipe, Sock, Port) ->
-%   case gen_tcp:recv(Sock, 9, 10) of
-%     {ok, "0009done\n"} ->
-%       % io:format("success"),
-%       port_command(Port, "0009done\n"),
-%       {ok, RequestPipe};
-%     _ ->
-%       % io:format("~p~n", [A]),
-%       case pipe:peek(9, RequestPipe) of
-%         {ok, <<"0009done\n">>} ->
-%           % io:format("success"),
-%           port_command(Port, "0009done\n"),
-%           {ok, _Data, P2} = pipe:read(9, RequestPipe),
-%           {ok, P2};
-%         _ ->
-%           % io:format("~p~n", [B]),
-%           {ok, RequestPipe}
-%       end
-%   end.
   
 % Safely unlink and close the port. If the port is not open, this is a noop.
 safe_port_close(Port) ->
