@@ -103,7 +103,12 @@ get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
       io:format("req = ~p~n", [Request]),
       log_request(Request, Host, Path),
       port_command(Port, Request),
-      send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
+      case pipe:size(RequestPipe2) > 0 of
+        true ->
+          get_request_from_client(RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
+        false ->
+          send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path)
+      end;
     {error, closed} ->
       io:format("socket closed~n"),
       ok = gen_tcp:close(Sock),
