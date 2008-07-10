@@ -74,10 +74,10 @@ export_ok(Sock, Host, Path, FullPath) ->
 make_port(Sock, Host, Path, FullPath) ->
   Command = "git upload-pack " ++ FullPath,
   Port = open_port({spawn, Command}, [binary]),
-  send_response_to_client(more, pipe:new(), pipe:new(), Port, Sock, Host, Path).
+  send_response_to_client(more, pipe:new(), pipe:new(), Port, Sock, Host, Path, []).
   
 % Send a response to the client
-send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
+send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Path, FullRequest) ->
   % io:format("send response~n"),
   try
     stream_out(Port, Sock, ResponsePipe)
@@ -86,25 +86,29 @@ send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Pat
   end,
   case Status of
     more ->
-      get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path);
+      get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path, FullRequest);
     done ->
       ok = gen_tcp:close(Sock),
       safe_port_close(Port)
   end.
 
 % Read a request from a client
-get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
+get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path, FullRequest) ->
   % io:format("get request~n"),
   case gather_request(Sock, RequestPipe) of
     {Status, Request, RequestPipe2} ->
       % io:format("req = ~p~n", [Request]),
-      log_request(Request, Host, Path),
+      FullRequest2 = [Request | FullRequest],
+      case Status of
+        more -> ok;
+        done -> log_request(string:join(lists:reverse(FullRequest), ""), Host, Path)
+      end,
       port_command(Port, Request),
       case pipe:size(RequestPipe2) > 0 of
         true ->
-          get_request_from_client(RequestPipe2, ResponsePipe, Port, Sock, Host, Path);
+          get_request_from_client(RequestPipe2, ResponsePipe, Port, Sock, Host, Path, FullRequest2);
         false ->
-          send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path)
+          send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path, FullRequest2)
       end;
     {error, closed} ->
       % io:format("socket closed~n"),
