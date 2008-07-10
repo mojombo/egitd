@@ -78,13 +78,11 @@ make_port(Sock, Host, Path, FullPath) ->
   
 % Send a response to the client
 send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
-  io:format("send response~n"),
+  % io:format("send response~n"),
   try
     stream_out(Port, Sock, ResponsePipe)
   catch
-    throw:{error, timeout} ->
-      io:format("stream out timed out~n"),
-      ok
+    throw:{error, timeout} -> ok
   end,
   case Status of
     more ->
@@ -92,15 +90,14 @@ send_response_to_client(Status, RequestPipe, ResponsePipe, Port, Sock, Host, Pat
     done ->
       ok = gen_tcp:close(Sock),
       safe_port_close(Port)
-      % send_response_to_client(done, RequestPipe, ResponsePipe, Port, Sock, Host, Path)
   end.
 
 % Read a request from a client
 get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
-  io:format("get request~n"),
+  % io:format("get request~n"),
   case gather_request(Sock, RequestPipe) of
     {Status, Request, RequestPipe2} ->
-      io:format("req = ~p~n", [Request]),
+      % io:format("req = ~p~n", [Request]),
       log_request(Request, Host, Path),
       port_command(Port, Request),
       case pipe:size(RequestPipe2) > 0 of
@@ -110,7 +107,7 @@ get_request_from_client(RequestPipe, ResponsePipe, Port, Sock, Host, Path) ->
           send_response_to_client(Status, RequestPipe2, ResponsePipe, Port, Sock, Host, Path)
       end;
     {error, closed} ->
-      io:format("socket closed~n"),
+      % io:format("socket closed~n"),
       ok = gen_tcp:close(Sock),
       safe_port_close(Port);
     {error, Reason} ->
@@ -141,7 +138,7 @@ gather_request(Sock, Pipe) ->
 gather_request(Sock, DataSoFar, Pipe) ->
   try
     {ok, Data, P2} = read_chunk_from_socket(Sock, Pipe),
-    io:format("~p~n", [Data]),
+    % io:format("~p~n", [Data]),
     TotalData = lists:append(DataSoFar, [Data]),
     if
       Data =:= <<"0000">> ->
@@ -161,7 +158,7 @@ gather_request(Sock, DataSoFar, Pipe) ->
 stream_out(Port, Sock, Pipe) ->
   % io:format("stream out "),
   {ok, Data, P2} = read_chunk(Port, Pipe),
-  io:format("~p~n", [Data]),
+  % io:format("~p~n", [Data]),
   gen_tcp:send(Sock, Data),
   case Data =:= <<"0000">> of
     true  -> done;
@@ -204,7 +201,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
 read_from_socket(Sock) ->
   case gen_tcp:recv(Sock, 0, 100) of
     {ok, Data} ->
-      io:format("socket = ~p~n", [Data]),
+      % io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
     {error, Reason} ->
       {error, Reason}
@@ -250,7 +247,7 @@ convert_chunk_size(ChunkSizeHex) ->
 readline(Port) ->
   receive
     {Port, {data, Data}} ->
-      io:format("port = ~p~n", [Data]),
+      % io:format("port = ~p~n", [Data]),
       {data, Data};
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
