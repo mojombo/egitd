@@ -203,7 +203,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
   end.
   
 read_from_socket(Sock) ->
-  case gen_tcp:recv(Sock, 0, 100) of
+  case gen_tcp:recv(Sock, 0, 1000) of
     {ok, Data} ->
       % io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
