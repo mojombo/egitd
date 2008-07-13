@@ -203,7 +203,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
   end.
   
 read_from_socket(Sock) ->
-  case gen_tcp:recv(Sock, 0, 1000) of
+  case gen_tcp:recv(Sock, 0, 5000) of
     {ok, Data} ->
       % io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
@@ -256,7 +256,7 @@ readline(Port) ->
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
       {error, Msg}
-    after 1000 ->
+    after 5000 ->
       error_logger:error_msg("timed out waiting for port~n"),
       throw({error, timeout})
   end.
