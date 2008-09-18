@@ -1,6 +1,9 @@
 -module(upload_pack).
 -export([handle/3]).
 
+-define(READ_SOCKET_TIMEOUT, 10000).
+-define(READ_PORT_TIMEOUT, 10000).
+
 %****************************************************************************
 %
 % Entry
@@ -203,7 +206,7 @@ read_chunk_body_from_socket(ChunkSizeHex, Sock, Pipe) ->
   end.
   
 read_from_socket(Sock) ->
-  case gen_tcp:recv(Sock, 0, 5000) of
+  case gen_tcp:recv(Sock, 0, ?READ_SOCKET_TIMEOUT) of
     {ok, Data} ->
       % io:format("socket = ~p~n", [Data]),
       {data, list_to_binary(Data)};
@@ -256,7 +259,7 @@ readline(Port) ->
     Msg ->
       error_logger:error_msg("unknown message ~p~n", [Msg]),
       {error, Msg}
-    after 5000 ->
+    after ?READ_PORT_TIMEOUT ->
       error_logger:error_msg("timed out waiting for port~n"),
       throw({error, timeout})
   end.
