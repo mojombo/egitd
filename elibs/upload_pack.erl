@@ -2,7 +2,7 @@
 -export([handle/3]).
 
 -define(READ_SOCKET_TIMEOUT, 10000).
--define(READ_PORT_TIMEOUT, 10000).
+-define(READ_PORT_TIMEOUT, 60000).
 
 %****************************************************************************
 %
