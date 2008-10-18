@@ -4,7 +4,7 @@
 %%      2) put pos+char in global state arg (no noticable difference)
 %%      3) get look-ahead character for proper eol (- 5-10% slower)
 
--module(re).
+-module(reg).
 
 -export([parse/1,match/2,first_match/2,matches/2,sub/3,gsub/3,split/2]).
 -export([smatch/2,first_smatch/2]).

@@ -10,7 +10,7 @@ read_conf(Conf) ->
 
 convert_path(Host, Path) ->
   [{Host, {Regex, Transform}}] = ets:lookup(db, Host),
-  case re:smatch(Path, Regex) of
+  case reg:smatch(Path, Regex) of
     {match, _A, _B, _C, MatchesTuple} ->
       Matches = tuple_to_list(MatchesTuple),
       Binding = create_binding(Matches),
