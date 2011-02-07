@@ -2,7 +2,8 @@
 -behaviour(gen_server).
 
 -record(state, {
-    socket
+    socket,
+    port
   }).
 
 %% ------------------------------------------------------------------
@@ -38,17 +39,17 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({_SocketType, Socket, Packet}, #state{socket = Socket} = State) ->
-  case Packet of
-    <<_:4/binary, "git", _:1/binary, Rest/binary>> ->
-      [Command, Args] = binary:split(Rest, <<" ">>),
-      io:format("git command ~p; args ~p~n", [Command, Args]),
-      {noreply, State};
-    _ ->
-      gen_tcp:send(Socket, "Invalid method declaration. Upgrade to the latest git.\n"),
-      gen_tcp:close(Socket),
-      {stop, normal, State}
-  end;
+
+%handle_info({_SocketTyoe, Socket
+handle_info({_SocketType, Socket, <<_Length:4/binary, "git", _:1/binary, Rest/binary>>}, #state{socket = Socket} = State) ->
+  [Method, Other] = binary:split(Rest, <<" ">>),
+  [Args, <<"host=", Host/binary>>, <<>>] = binary:split(Other, <<0>>, [global]),
+  io:format("git method ~p; args ~p host ~p~n", [Method, Args, Host]),
+  dispatch_method(Method, Host, Args, State);
+handle_info({_SocketType, Socket, _Packet}, #state{socket = Socket} = State) ->
+  gen_tcp:send(Socket, "Invalid method declaration. Upgrade to the latest git.\n"),
+  gen_tcp:close(Socket),
+  {stop, normal, State};
 handle_info(_Info, State) ->
   io:format("unhandled info ~p~n", [_Info]),
   {noreply, State}.
@@ -62,4 +63,63 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
+  try conf:convert_path(binary_to_list(Host), binary_to_list(Path)) of
+    {ok, FullPath} ->
+      case repo_existance(FullPath) of
+        false ->
+          throw(nomatch);
+        RealPath ->
+          GitDaemonExportOkFilePath = filename:join([RealPath, "git-daemon-export-ok"]),
+          case filelib:is_regular(GitDaemonExportOkFilePath) of
+            true ->
+              %% all validated, yay
+              io:format("ready to do an upload-pack~n"),
+              Port = make_port(Sock, "upload-pack", Host, Path, RealPath),
+              {noreply, State#state{port = Port}};
+            false ->
+              throw({noexport, RealPath})
+          end
+      end;
+    {error, nomatch} ->
+      throw(nomatch)
+  catch
+    throw:nomatch ->
+      error_logger:info_msg("no repo match: ~p~n", [Path]),
+      gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
+      gen_tcp:close(Sock),
+      {stop, normal, State};
+    throw:{noexport, RealPath} ->
+      error_logger:info_msg("permission denied to repo: ~p~n", [RealPath]),
+      gen_tcp:send(Sock, "0048\n*********'\n\nPermission denied. Repository is not public.\n\n*********"),
+      gen_tcp:close(Sock),
+      {stop, normal, State}
+  end;
+dispatch_method(<<"receive-pack">>, _Host, _Args, #state{socket = Sock} = State) ->
+  %% TODO make this message include the actual repo
+  gen_tcp:send(Sock, "006d\n*********'\n\nYou can't push to git://github.com/user/repo.git\nUse git@github.com:user/repo.git\n\n*********"),
+  gen_tcp:close(Sock),
+  {stop, normal, State};
+dispatch_method(_Method, _Host, _Args, #state{socket = Sock} = State) ->
+  gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
+  gen_tcp:close(Sock),
+  {stop, normal, State}.
+
+repo_existance(Path) ->
+  case filelib:is_dir(Path) of
+    true ->
+      Path;
+    _ ->
+      case filelib:is_dir(Path ++ ".git") of
+        true ->
+          Path ++ ".git";
+        _ ->
+          false
+      end
+  end.
+
+make_port(Sock, Method, _Host, _Path, FullPath) ->
+  Command = lists:flatten(["git ", Method, " ", FullPath]),
+  open_port({spawn, Command}, [binary]).
 
