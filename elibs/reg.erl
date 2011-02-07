@@ -818,7 +818,7 @@ gsub_bin(Bin, P, Nfa, Rep) ->
 split(S, " ") -> split(S, "[ \t]+", true);	%This is really special!
 split(S, Regexp) -> split(S, Regexp, false).
 
-split(S, Regexp, Trim) when list(Regexp) ->
+split(S, Regexp, Trim) when is_list(Regexp) ->
     case parse(Regexp) of
 	{ok,RE} -> split(S, RE, Trim);
 	{error,E} -> {error,E}

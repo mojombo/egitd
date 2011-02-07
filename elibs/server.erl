@@ -67,17 +67,18 @@ handle_method_dispatch(invalid, Sock, _Host, _Header) ->
   ok = gen_tcp:close(Sock).
   
 extract_method_name(Header) ->
-  case regexp:match(Header, "....git[ -][a-z\-]+ ") of
-    {match, Start, Length} ->
-      {ok, string:substr(Header, Start + 8, Length - 9)};
+  case re:run(Header, "....git[ -][a-z\\-]+ ", []) of
+    {match, [{Start, Length}]} ->
+      {ok, string:substr(Header, Start + 9, Length - 9)};
     _Else ->
       invalid
   end.
   
 extract_host(Header) ->
-  case regexp:match(string:to_lower(Header), "\000host=[^\000]+\000") of
-    {match, Start, Length} ->
-      {ok, string:substr(Header, Start + 6, Length - 7)};
+  case re:run(string:to_lower(Header), "\\000host=[^\\000]+\\000", []) of
+    {match, [{Start, Length}]} ->
+      io:format("Header: ~p Start ~p Length ~p~n", [Header, Start, Length]),
+      {ok, string:substr(Header, Start + 7, Length - 7)};
     _Else ->
       {ok, "invalid"}
   end.

@@ -21,9 +21,9 @@ handle(Sock, Host, Header) ->
 
 % Extract the repo from the header.
 extract_repo_path(Sock, Host, Header) ->
-  case regexp:match(Header, " /[^\000]+\000") of
-    {match, Start, Length} ->
-      Path = string:substr(Header, Start + 2, Length - 3),
+  case re:run(Header, " /[^\\000]+\\000", []) of
+    {match, [{Start, Length}]} ->
+      Path = string:substr(Header, Start + 3, Length - 3),
       convert_path(Sock, Host, Path);
     _Else ->
       invalid
