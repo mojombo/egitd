@@ -28,7 +28,7 @@ init_log(undefined) ->
 try_listen(0) ->
   error_logger:info_msg("Could not listen on port 9418~n");
 try_listen(Times) ->
-  Res = gen_tcp:listen(9418, [list, {packet, 0}, {active, false}]),
+  Res = gen_tcp:listen(9418, [binary, {packet, 0}, {active, false}]),
   case Res of
     {ok, LSock} ->
       error_logger:info_msg("Listening on port 9418~n"),
@@ -41,7 +41,8 @@ try_listen(Times) ->
     
 loop(LSock) ->
   {ok, Sock} = gen_tcp:accept(LSock),
-  spawn(fun() -> handle_method(Sock) end),
+  {ok, Pid} = git_client:start_link(Sock),
+  gen_tcp:controlling_process(Sock, Pid),
   loop(LSock).
   
 handle_method(Sock) ->

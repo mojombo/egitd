@@ -40,7 +40,15 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 
-%handle_info({_SocketTyoe, Socket
+handle_info({Port, {data, Data}}, #state{socket = Sock, port = Port} = State) ->
+  %io:format("forwarding data to socket ~p~n", [Data]),
+  gen_tcp:send(Sock, Data),
+  {noreply, State};
+handle_info({_SocketType, Socket, Packet}, #state{socket = Socket, port = Port} = State) when is_port(Port) ->
+  %io:format("forwarding data to port ~p~n", [Packet]),
+  port_command(Port, Packet),
+  inet:setopts(Socket, [{active, once}]),
+  {noreply, State};
 handle_info({_SocketType, Socket, <<_Length:4/binary, "git", _:1/binary, Rest/binary>>}, #state{socket = Socket} = State) ->
   [Method, Other] = binary:split(Rest, <<" ">>),
   [Args, <<"host=", Host/binary>>, <<>>] = binary:split(Other, <<0>>, [global]),
@@ -49,6 +57,8 @@ handle_info({_SocketType, Socket, <<_Length:4/binary, "git", _:1/binary, Rest/bi
 handle_info({_SocketType, Socket, _Packet}, #state{socket = Socket} = State) ->
   gen_tcp:send(Socket, "Invalid method declaration. Upgrade to the latest git.\n"),
   gen_tcp:close(Socket),
+  {stop, normal, State};
+handle_info({tcp_closed, Socket}, #state{socket = Socket} = State) ->
   {stop, normal, State};
 handle_info(_Info, State) ->
   io:format("unhandled info ~p~n", [_Info]),
@@ -77,6 +87,7 @@ dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
               %% all validated, yay
               io:format("ready to do an upload-pack~n"),
               Port = make_port(Sock, "upload-pack", Host, Path, RealPath),
+              inet:setopts(Sock, [{active, once}]),
               {noreply, State#state{port = Port}};
             false ->
               throw({noexport, RealPath})
@@ -119,7 +130,8 @@ repo_existance(Path) ->
       end
   end.
 
-make_port(Sock, Method, _Host, _Path, FullPath) ->
+make_port(_Sock, Method, _Host, _Path, FullPath) ->
   Command = lists:flatten(["git ", Method, " ", FullPath]),
+  io:format("making port with command ~p~n", [Command]),
   open_port({spawn, Command}, [binary]).
 
