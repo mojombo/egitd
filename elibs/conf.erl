@@ -10,9 +10,8 @@ read_conf(Conf) ->
 
 convert_path(Host, Path) ->
   [{Host, {Regex, Transform}}] = ets:lookup(db, Host),
-  case reg:smatch(Path, Regex) of
-    {match, _A, _B, _C, MatchesTuple} ->
-      Matches = tuple_to_list(MatchesTuple),
+	case re:run(Path, Regex, [{capture, all_but_first, list}]) of
+    {match, Matches} ->
       Binding = create_binding(Matches),
       % io:format("binding = ~p~n", [Binding]),
       eval_erlang_expr(Transform, Binding);
@@ -27,9 +26,8 @@ parse_conf_line(Line) ->
   ets:insert(db, {Host, {Regex, Transform}}).
 
 create_binding(Matches) ->
-  Modder = fun(M, Acc) ->
+  Modder = fun(Word, Acc) ->
     {I, Arr} = Acc,
-    {_A, _B, Word} = M,
     Mod = {I, Word},
     {I + 1, lists:append(Arr, [Mod])}
   end,
