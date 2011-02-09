@@ -18,7 +18,9 @@ INSTALL
 
 $ git clone git@github.com:mojombo/egitd.git
 $ cd egitd
-$ rake
+$ make
+
+You can also build by using ./rebar compile, which the Makefile invokes.
 
 
 RUN
