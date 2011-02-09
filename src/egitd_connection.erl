@@ -75,34 +75,36 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
-  try conf:convert_path(binary_to_list(Host), binary_to_list(Path)) of
-    {ok, FullPath} ->
-      case repo_existance(FullPath) of
-        false ->
-          throw(nomatch);
-        RealPath ->
-          GitDaemonExportOkFilePath = filename:join([RealPath, "git-daemon-export-ok"]),
-          case filelib:is_regular(GitDaemonExportOkFilePath) of
-            true ->
-              %% all validated, yay
-              io:format("ready to do an upload-pack~n"),
-              Port = make_port(Sock, "upload-pack", Host, Path, RealPath),
-              inet:setopts(Sock, [{active, once}]),
-              {noreply, State#state{port = Port}};
-            false ->
-              throw({noexport, RealPath})
-          end
-      end;
-    {error, nomatch} ->
-      throw(nomatch)
+  try
+    case conf:convert_path(binary_to_list(Host), binary_to_list(Path)) of
+      {ok, FullPath} ->
+        case repo_existance(FullPath) of
+          false ->
+            throw(nomatch);
+          RealPath ->
+            GitDaemonExportOkFilePath = filename:join([RealPath, "git-daemon-export-ok"]),
+            case filelib:is_regular(GitDaemonExportOkFilePath) of
+              true ->
+                %% all validated, yay
+                io:format("ready to do an upload-pack~n"),
+                Port = make_port(Sock, "upload-pack", Host, Path, RealPath),
+                inet:setopts(Sock, [{active, once}]),
+                {noreply, State#state{port = Port}};
+              false ->
+                throw({noexport, RealPath})
+            end
+        end;
+      {error, nomatch} ->
+        throw(nomatch)
+    end
   catch
     throw:nomatch ->
       error_logger:info_msg("no repo match: ~p~n", [Path]),
       gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
       gen_tcp:close(Sock),
       {stop, normal, State};
-    throw:{noexport, RealPath} ->
-      error_logger:info_msg("permission denied to repo: ~p~n", [RealPath]),
+    throw:{noexport, ThePath} ->
+      error_logger:info_msg("permission denied to repo: ~p~n", [ThePath]),
       gen_tcp:send(Sock, "0048\n*********'\n\nPermission denied. Repository is not public.\n\n*********"),
       gen_tcp:close(Sock),
       {stop, normal, State}
