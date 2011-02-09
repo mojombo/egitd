@@ -29,7 +29,7 @@ create_binding(Matches) ->
   Modder = fun(Word, Acc) ->
     {I, Arr} = Acc,
     Mod = {I, Word},
-    {I + 1, lists:append(Arr, [Mod])}
+    {I + 1, Arr ++ [Mod]}
   end,
   {_X, Matches2} = lists:foldl(Modder, {1, []}, Matches),
   Binder = fun(Match, B) ->
