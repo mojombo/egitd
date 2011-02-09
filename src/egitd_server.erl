@@ -1,4 +1,4 @@
--module(server).
+-module(egitd_server).
 -export([start_link/0, init/1]).
 
 start_link() ->
@@ -41,7 +41,7 @@ try_listen(Times) ->
     
 loop(LSock) ->
   {ok, Sock} = gen_tcp:accept(LSock),
-  {ok, Pid} = git_client:start_link(Sock),
+  {ok, Pid} = egitd_connection:start_link(Sock),
   gen_tcp:controlling_process(Sock, Pid),
   loop(LSock).
   

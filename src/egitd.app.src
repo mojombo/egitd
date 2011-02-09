@@ -2,7 +2,7 @@
   [{description, "The Erlang git-daemon"},
    {vsn, "0.0.0"},
    {modules, []},
-   {registered, [server]},
+   {registered, [egitd_server]},
    {applications, [kernel, stdlib]},
    {mod, {egitd_app, []}},
    {start_phases, []}

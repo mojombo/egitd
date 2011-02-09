@@ -1,4 +1,4 @@
--module(conf).
+-module(egitd_conf).
 -export([read_conf/1, convert_path/2, eval_erlang_expr/1, eval_erlang_expr/2,
          concat/2, namespace3/1, md5_namespace3/1, hexmod8/1]).
 

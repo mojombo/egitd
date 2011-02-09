@@ -24,6 +24,6 @@ init([]) ->
   
   {ok, {{one_for_one, 100, 300},
     [{server,
-       {server, start_link, []},
+       {egitd_server, start_link, []},
        permanent, 10000, worker, [server]}
     ]}}.

@@ -1,4 +1,4 @@
--module(git_client).
+-module(egitd_connection).
 -behaviour(gen_server).
 
 -record(state, {
