@@ -55,7 +55,7 @@ handle_info({_SocketType, Socket, <<_Length:4/binary, "git", _:1/binary, Rest/bi
   io:format("git method ~p; args ~p host ~p~n", [Method, Args, Host]),
   dispatch_method(Method, Host, Args, State);
 handle_info({_SocketType, Socket, _Packet}, #state{socket = Socket} = State) ->
-  gen_tcp:send(Socket, "Invalid method declaration. Upgrade to the latest git.\n"),
+  send_error(Socket, "\n*********\n\nInvalid method declaration. Upgrade to the latest git.\n\n*********'"),
   gen_tcp:close(Socket),
   {stop, normal, State};
 handle_info({tcp_closed, Socket}, #state{socket = Socket} = State) ->
@@ -100,22 +100,22 @@ dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
   catch
     throw:nomatch ->
       error_logger:info_msg("no repo match: ~p~n", [Path]),
-      gen_tcp:send(Sock, "003b\n*********'\n\nNo matching repositories found.\n\n*********"),
+      send_error(Sock, ["\n*********\n\nNo matching repositories found for git://", Host, Path, ".\n\n*********"]),
       gen_tcp:close(Sock),
       {stop, normal, State};
     throw:{noexport, ThePath} ->
       error_logger:info_msg("permission denied to repo: ~p~n", [ThePath]),
-      gen_tcp:send(Sock, "0048\n*********'\n\nPermission denied. Repository is not public.\n\n*********"),
+      send_error(Sock, ["\n*********\n\nPermission denied. Repository git://", Host, Path, " is not public.\n\n*********"]),
       gen_tcp:close(Sock),
       {stop, normal, State}
   end;
-dispatch_method(<<"receive-pack">>, _Host, _Args, #state{socket = Sock} = State) ->
-  %% TODO make this message include the actual repo
-  gen_tcp:send(Sock, "006d\n*********'\n\nYou can't push to git://github.com/user/repo.git\nUse git@github.com:user/repo.git\n\n*********"),
+dispatch_method(<<"receive-pack">>, Host, Path, #state{socket = Sock} = State) ->
+  SSHPath = [":", binary:part(Path, {1, byte_size(Path) -1})],
+  send_error(Sock, ["\n*********\n\nYou can't push to git://", Host, Path, "\nUse git@", Host, SSHPath, "\n\n*********"]),
   gen_tcp:close(Sock),
   {stop, normal, State};
-dispatch_method(_Method, _Host, _Args, #state{socket = Sock} = State) ->
-  gen_tcp:send(Sock, "Invalid method declaration. Upgrade to the latest git.\n"),
+dispatch_method(Method, _Host, _Args, #state{socket = Sock} = State) ->
+  send_error(Sock, ["\n*********\n\nInvalid method declaration: '", Method, "'. Upgrade to the latest git.\n\n*********'"]),
   gen_tcp:close(Sock),
   {stop, normal, State}.
 
@@ -134,6 +134,10 @@ repo_existance(Path) ->
 
 make_port(_Sock, Method, _Host, _Path, FullPath) ->
   Command = lists:flatten(["git ", Method, " ", FullPath]),
-  io:format("making port with command ~p~n", [Command]),
   open_port({spawn, Command}, [binary]).
+
+send_error(Socket, Error) ->
+  FlatError = list_to_binary(Error),
+  ErrorMsg = io_lib:format("~4.16.0B~s", [byte_size(FlatError)+4, FlatError]),
+  gen_tcp:send(Socket, ErrorMsg).
 
