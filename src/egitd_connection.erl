@@ -41,18 +41,15 @@ handle_cast(_Msg, State) ->
 
 
 handle_info({Port, {data, Data}}, #state{socket = Sock, port = Port} = State) ->
-  %io:format("forwarding data to socket ~p~n", [Data]),
   gen_tcp:send(Sock, Data),
   {noreply, State};
 handle_info({_SocketType, Socket, Packet}, #state{socket = Socket, port = Port} = State) when is_port(Port) ->
-  %io:format("forwarding data to port ~p~n", [Packet]),
   port_command(Port, Packet),
   inet:setopts(Socket, [{active, once}]),
   {noreply, State};
 handle_info({_SocketType, Socket, <<_Length:4/binary, "git", _:1/binary, Rest/binary>>}, #state{socket = Socket} = State) ->
   [Method, Other] = binary:split(Rest, <<" ">>),
   [Args, <<"host=", Host/binary>>, <<>>] = binary:split(Other, <<0>>, [global]),
-  io:format("git method ~p; args ~p host ~p~n", [Method, Args, Host]),
   dispatch_method(Method, Host, Args, State);
 handle_info({_SocketType, Socket, _Packet}, #state{socket = Socket} = State) ->
   send_error(Socket, "\n*********\n\nInvalid method declaration. Upgrade to the latest git.\n\n*********'"),
@@ -61,7 +58,7 @@ handle_info({_SocketType, Socket, _Packet}, #state{socket = Socket} = State) ->
 handle_info({tcp_closed, Socket}, #state{socket = Socket} = State) ->
   {stop, normal, State};
 handle_info(_Info, State) ->
-  io:format("unhandled info ~p~n", [_Info]),
+  error_logger:info_msg("unhandled info ~p~n", [_Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -86,7 +83,6 @@ dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
             case filelib:is_regular(GitDaemonExportOkFilePath) of
               true ->
                 %% all validated, yay
-                io:format("ready to do an upload-pack~n"),
                 Port = make_port(Sock, "upload-pack", Host, Path, RealPath),
                 inet:setopts(Sock, [{active, once}]),
                 {noreply, State#state{port = Port}};
