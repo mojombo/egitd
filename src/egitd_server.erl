@@ -16,7 +16,7 @@ init(Parent) ->
 read_conf() ->
   {ok, Conf} = application:get_env(conf),
   error_logger:info_msg("Using conf file ~p~n", [Conf]),
-  conf:read_conf(Conf).
+  egitd_conf:read_conf(Conf).
   
 init_log() ->
   init_log(application:get_env(log)).
