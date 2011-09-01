@@ -73,7 +73,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 dispatch_method(<<"upload-pack">>, Host, Path, #state{socket = Sock} = State) ->
   try
-    case conf:convert_path(binary_to_list(Host), binary_to_list(Path)) of
+    case egitd_conf:convert_path(binary_to_list(Host), binary_to_list(Path)) of
       {ok, FullPath} ->
         case repo_existance(FullPath) of
           false ->
