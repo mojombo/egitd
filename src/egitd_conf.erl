@@ -1,4 +1,4 @@
--module(conf).
+-module(egitd_conf).
 -export([read_conf/1, convert_path/2, eval_erlang_expr/1, eval_erlang_expr/2,
          concat/2, namespace3/1, md5_namespace3/1, hexmod8/1]).
 
@@ -10,9 +10,8 @@ read_conf(Conf) ->
 
 convert_path(Host, Path) ->
   [{Host, {Regex, Transform}}] = ets:lookup(db, Host),
-  case reg:smatch(Path, Regex) of
-    {match, _A, _B, _C, MatchesTuple} ->
-      Matches = tuple_to_list(MatchesTuple),
+	case re:run(Path, Regex, [{capture, all_but_first, list}]) of
+    {match, Matches} ->
       Binding = create_binding(Matches),
       % io:format("binding = ~p~n", [Binding]),
       eval_erlang_expr(Transform, Binding);
@@ -27,11 +26,10 @@ parse_conf_line(Line) ->
   ets:insert(db, {Host, {Regex, Transform}}).
 
 create_binding(Matches) ->
-  Modder = fun(M, Acc) ->
+  Modder = fun(Word, Acc) ->
     {I, Arr} = Acc,
-    {_A, _B, Word} = M,
     Mod = {I, Word},
-    {I + 1, lists:append(Arr, [Mod])}
+    {I + 1, Arr ++ [Mod]}
   end,
   {_X, Matches2} = lists:foldl(Modder, {1, []}, Matches),
   Binder = fun(Match, B) ->
